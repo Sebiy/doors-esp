@@ -66,11 +66,18 @@ local function ApplyDoorESP(room)
     local door = room:WaitForChild("Door", 2)
     if not door then return end
     
-    -- Check if locked (Lock MeshPart exists and is visible)
+    -- Check if locked (Lock MeshPart exists)
     local lock = door:FindFirstChild("Lock")
     local isLocked = false
-    if lock and lock:IsA("MeshPart") then
-        isLocked = (lock.Transparency < 1)
+    
+    -- Debug: Check what we found
+    if lock then
+        warn(string.format("Room %d - Lock found: %s, ClassName: %s, Transparency: %s", roomNumber, tostring(lock), lock.ClassName, tostring(lock.Transparency)))
+        if lock:IsA("MeshPart") then
+            isLocked = true
+        end
+    else
+        warn(string.format("Room %d - No Lock found (unlocked)", roomNumber))
     end
     
     -- Colors
