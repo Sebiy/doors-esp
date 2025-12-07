@@ -98,528 +98,556 @@ local Settings = {
 ]]
 
 
-local function CreateGUI()
-    local VesperGUI = Instance.new("ScreenGui")
-    VesperGUI.Name = "VesperGUI"
-    VesperGUI.ResetOnSpawn = false
-    VesperGUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    
-    -- Main Frame (850x550 for better layout)
-    local MainFrame = Instance.new("Frame")
-    MainFrame.Name = "MainFrame"
-    MainFrame.Size = UDim2.new(0, 850, 0, 550)
-    MainFrame.Position = UDim2.new(0.5, -425, 0.5, -275)
-    MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
-    MainFrame.BorderSizePixel = 0
-    MainFrame.ClipsDescendants = true
-    MainFrame.Parent = VesperGUI
-    
-    local MainCorner = Instance.new("UICorner")
-    MainCorner.CornerRadius = UDim.new(0, 10)
-    MainCorner.Parent = MainFrame
-    
-    local MainStroke = Instance.new("UIStroke")
-    MainStroke.Color = Color3.fromRGB(50, 50, 50)
-    MainStroke.Thickness = 1
-    MainStroke.Parent = MainFrame
-    
-    -- Drag functionality
-    local dragging, dragInput, dragStart, startPos
-    
-    MainFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = MainFrame.Position
-            
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-    
-    MainFrame.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement then
-            dragInput = input
-        end
-    end)
-    
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-    
-    -- Header Bar
-    local Header = Instance.new("Frame")
-    Header.Size = UDim2.new(1, 0, 0, 60)
-    Header.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    Header.BorderSizePixel = 0
-    Header.Parent = MainFrame
-    
-    -- Logo
-    local LogoText = Instance.new("TextLabel")
-    LogoText.Size = UDim2.new(0, 150, 1, 0)
-    LogoText.Position = UDim2.new(0, 70, 0, 0)
-    LogoText.BackgroundTransparency = 1
-    LogoText.Text = "⭐ vesper.lua"
-    LogoText.TextColor3 = Color3.fromRGB(168, 85, 247)
-    LogoText.TextSize = 18
-    LogoText.Font = Enum.Font.GothamBold
-    LogoText.TextXAlignment = Enum.TextXAlignment.Left
-    LogoText.Parent = Header
-    
-    -- Search Bar
-    local SearchBox = Instance.new("TextBox")
-    SearchBox.Size = UDim2.new(0, 350, 0, 35)
-    SearchBox.Position = UDim2.new(0, 280, 0.5, -17)
-    SearchBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    SearchBox.PlaceholderText = "Search"
-    SearchBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 100)
-    SearchBox.Text = ""
-    SearchBox.TextColor3 = Color3.fromRGB(200, 200, 200)
-    SearchBox.TextSize = 14
-    SearchBox.Font = Enum.Font.Gotham
-    SearchBox.BorderSizePixel = 0
-    SearchBox.Parent = Header
-    
-    local SearchCorner = Instance.new("UICorner")
-    SearchCorner.CornerRadius = UDim.new(0, 6)
-    SearchCorner.Parent = SearchBox
-    
-    -- Search Icon
-    local SearchIcon = Instance.new("TextLabel")
-    SearchIcon.Size = UDim2.new(0, 25, 1, 0)
-    SearchIcon.Position = UDim2.new(0, 5, 0, 0)
-    SearchIcon.BackgroundTransparency = 1
-    SearchIcon.Text = "🔍"
-    SearchIcon.TextColor3 = Color3.fromRGB(100, 100, 100)
-    SearchIcon.TextSize = 16
-    SearchIcon.Parent = SearchBox
-    
-    -- Close Button
-    local CloseButton = Instance.new("TextButton")
-    CloseButton.Size = UDim2.new(0, 30, 0, 30)
-    CloseButton.Position = UDim2.new(1, -40, 0.5, -15)
-    CloseButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    CloseButton.Text = "✕"
-    CloseButton.TextColor3 = Color3.fromRGB(200, 200, 200)
-    CloseButton.TextSize = 16
-    CloseButton.Font = Enum.Font.GothamBold
-    CloseButton.BorderSizePixel = 0
-    CloseButton.Parent = Header
-    
-    local CloseCorner = Instance.new("UICorner")
-    CloseCorner.CornerRadius = UDim.new(0, 6)
-    CloseCorner.Parent = CloseButton
-    
-    CloseButton.MouseEnter:Connect(function()
-        TweenService:Create(CloseButton, TweenInfo.new(0.2), {
-            BackgroundColor3 = Color3.fromRGB(220, 60, 80)
-        }):Play()
-    end)
-    
-    CloseButton.MouseLeave:Connect(function()
-        TweenService:Create(CloseButton, TweenInfo.new(0.2), {
-            BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        }):Play()
-    end)
-    
-    CloseButton.MouseButton1Click:Connect(function()
-        VesperGUI.Enabled = false
-        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-    end)
-    
-    -- LEFT SIDEBAR
-    local Sidebar = Instance.new("Frame")
-    Sidebar.Size = UDim2.new(0, 200, 1, -110)
-    Sidebar.Position = UDim2.new(0, 10, 0, 70)
-    Sidebar.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-    Sidebar.BorderSizePixel = 0
-    Sidebar.Parent = MainFrame
-    
-    local SidebarCorner = Instance.new("UICorner")
-    SidebarCorner.CornerRadius = UDim.new(0, 8)
-    SidebarCorner.Parent = Sidebar
-    
-    local SidebarList = Instance.new("UIListLayout")
-    SidebarList.Padding = UDim.new(0, 5)
-    SidebarList.SortOrder = Enum.SortOrder.LayoutOrder
-    SidebarList.Parent = Sidebar
-    
-    -- MAIN CONTENT AREA
-    local ContentArea = Instance.new("Frame")
-    ContentArea.Size = UDim2.new(1, -225, 1, -110)
-    ContentArea.Position = UDim2.new(0, 215, 0, 70)
-    ContentArea.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-    ContentArea.BorderSizePixel = 0
-    ContentArea.Parent = MainFrame
-    
-    local ContentCorner = Instance.new("UICorner")
-    ContentCorner.CornerRadius = UDim.new(0, 8)
-    ContentCorner.Parent = ContentArea
-    
-    -- BOTTOM STATUS BAR
-    local StatusBar = Instance.new("Frame")
-    StatusBar.Size = UDim2.new(1, -20, 0, 30)
-    StatusBar.Position = UDim2.new(0, 10, 1, -35)
-    StatusBar.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-    StatusBar.BorderSizePixel = 0
-    StatusBar.Parent = MainFrame
-    
-    local StatusCorner = Instance.new("UICorner")
-    StatusCorner.CornerRadius = UDim.new(0, 8)
-    StatusCorner.Parent = StatusBar
-    
-    local StatusText = Instance.new("TextLabel")
-    StatusText.Size = UDim2.new(1, -10, 1, 0)
-    StatusText.Position = UDim2.new(0, 10, 0, 0)
-    StatusText.BackgroundTransparency = 1
-    StatusText.Text = "version: vesper.lua v1.0 | game: DOORS | made with ♥"
-    StatusText.TextColor3 = Color3.fromRGB(120, 120, 120)
-    StatusText.TextSize = 11
-    StatusText.Font = Enum.Font.Gotham
-    StatusText.TextXAlignment = Enum.TextXAlignment.Left
-    StatusText.Parent = StatusBar
-    
-    -- ============================================
-    -- HELPER FUNCTIONS
-    -- ============================================
-    
-    local function CreateSidebarButton(name, icon)
-        local Button = Instance.new("TextButton")
-        Button.Size = UDim2.new(1, 0, 0, 40)
-        Button.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        Button.Text = ""
-        Button.BorderSizePixel = 0
-        Button.Parent = Sidebar
-        
-        local ButtonCorner = Instance.new("UICorner")
-        ButtonCorner.CornerRadius = UDim.new(0, 6)
-        ButtonCorner.Parent = Button
-        
-        local Label = Instance.new("TextLabel")
-        Label.Size = UDim2.new(1, -10, 1, 0)
-        Label.Position = UDim2.new(0, 10, 0, 0)
-        Label.BackgroundTransparency = 1
-        Label.Text = name
-        Label.TextColor3 = Color3.fromRGB(150, 150, 150)
-        Label.TextSize = 14
-        Label.Font = Enum.Font.GothamSemibold
-        Label.TextXAlignment = Enum.TextXAlignment.Left
-        Label.Parent = Button
-        
-        return Button, Label
+
+-- Load MSPaint Obsidian Library
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+-- Create Window
+local Window = Library:CreateWindow({
+    Title = "vesper.lua",
+    Footer = "version: v1.0 | made with ♥",
+    Icon = 95816097006870,
+    NotifySide = "Right",
+    ShowCustomCursor = true,
+    Center = true,
+    AutoShow = true,
+})
+
+-- Create Tabs
+local Tabs = {
+    Main = Window:AddTab("Main", "home"),
+    ESP = Window:AddTab("ESP", "eye"),
+    Player = Window:AddTab("Player", "user"),
+    Visuals = Window:AddTab("Visuals", "monitor"),
+    Settings = Window:AddTab("UI Settings", "settings"),
+}
+
+-- ============================================
+-- MAIN TAB
+-- ============================================
+
+local MiscGroup = Tabs.Main:AddLeftGroupbox("Miscellaneous", "wrench")
+
+MiscGroup:AddToggle("InstantInteract", {
+    Text = "Instant Proximity Prompt",
+    Tooltip = "Instantly interact with prompts",
+    Default = Settings.InstantInteract,
+    Callback = function(Value)
+        Settings.InstantInteract = Value
     end
-    
-    local function CreateSection(parent, title)
-        local Section = Instance.new("Frame")
-        Section.Size = UDim2.new(0.48, 0, 0, 0)
-        Section.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
-        Section.BorderSizePixel = 0
-        Section.Parent = parent
-        Section.AutomaticSize = Enum.AutomaticSize.Y
-        
-        local SectionCorner = Instance.new("UICorner")
-        SectionCorner.CornerRadius = UDim.new(0, 8)
-        SectionCorner.Parent = Section
-        
-        local Title = Instance.new("TextLabel")
-        Title.Size = UDim2.new(1, 0, 0, 30)
-        Title.BackgroundTransparency = 1
-        Title.Text = title
-        Title.TextColor3 = Color3.fromRGB(200, 200, 200)
-        Title.TextSize = 15
-        Title.Font = Enum.Font.GothamBold
-        Title.TextXAlignment = Enum.TextXAlignment.Left
-        Title.Position = UDim2.new(0, 10, 0, 5)
-        Title.Parent = Section
-        
-        local Container = Instance.new("Frame")
-        Container.Size = UDim2.new(1, -10, 0, 0)
-        Container.Position = UDim2.new(0, 5, 0, 35)
-        Container.BackgroundTransparency = 1
-        Container.Parent = Section
-        Container.AutomaticSize = Enum.AutomaticSize.Y
-        
-        local List = Instance.new("UIListLayout")
-        List.Padding = UDim.new(0, 5)
-        List.Parent = Container
-        
-        return Section, Container
+})
+
+MiscGroup:AddToggle("BreakVoid", {
+    Text = "break ROBLOX Void",
+    Tooltip = "Prevents void death",
+    Default = Settings.BreakVoid,
+    Callback = function(Value)
+        Settings.BreakVoid = Value
     end
-    
-    local function CreateToggle(parent, text, setting, callback)
-        local Toggle = Instance.new("Frame")
-        Toggle.Size = UDim2.new(1, 0, 0, 30)
-        Toggle.BackgroundTransparency = 1
-        Toggle.Parent = parent
-        
-        local Label = Instance.new("TextLabel")
-        Label.Size = UDim2.new(1, -50, 1, 0)
-        Label.BackgroundTransparency = 1
-        Label.Text = text
-        Label.TextColor3 = Color3.fromRGB(200, 200, 200)
-        Label.TextSize = 13
-        Label.Font = Enum.Font.Gotham
-        Label.TextXAlignment = Enum.TextXAlignment.Left
-        Label.Parent = Toggle
-        
-        local Button = Instance.new("TextButton")
-        Button.Size = UDim2.new(0, 35, 0, 18)
-        Button.Position = UDim2.new(1, -40, 0.5, -9)
-        Button.BackgroundColor3 = Settings[setting] and Color3.fromRGB(168, 85, 247) or Color3.fromRGB(50, 50, 50)
-        Button.Text = ""
-        Button.BorderSizePixel = 0
-        Button.Parent = Toggle
-        
-        local ButtonCorner = Instance.new("UICorner")
-        ButtonCorner.CornerRadius = UDim.new(1, 0)
-        ButtonCorner.Parent = Button
-        
-        local Indicator = Instance.new("Frame")
-        Indicator.Size = UDim2.new(0, 14, 0, 14)
-        Indicator.Position = Settings[setting] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
-        Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        Indicator.BorderSizePixel = 0
-        Indicator.Parent = Button
-        
-        local IndicatorCorner = Instance.new("UICorner")
-        IndicatorCorner.CornerRadius = UDim.new(1, 0)
-        IndicatorCorner.Parent = Indicator
-        
-        Button.MouseButton1Click:Connect(function()
-            Settings[setting] = not Settings[setting]
-            TweenService:Create(Button, TweenInfo.new(0.2), {
-                BackgroundColor3 = Settings[setting] and Color3.fromRGB(168, 85, 247) or Color3.fromRGB(50, 50, 50)
-            }):Play()
-            TweenService:Create(Indicator, TweenInfo.new(0.2), {
-                Position = Settings[setting] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
-            }):Play()
-            if callback then callback(Settings[setting]) end
-        end)
-        
-        return Toggle
+})
+
+MiscGroup:AddToggle("NoCutscenes", {
+    Text = "No cutscenes",
+    Tooltip = "Skips cutscenes",
+    Default = Settings.NoCutscenes,
+    Callback = function(Value)
+        Settings.NoCutscenes = Value
     end
-    
-    local function CreateSlider(parent, text, setting, min, max, suffix, callback)
-        local Slider = Instance.new("Frame")
-        Slider.Size = UDim2.new(1, 0, 0, 45)
-        Slider.BackgroundTransparency = 1
-        Slider.Parent = parent
-        
-        local Label = Instance.new("TextLabel")
-        Label.Size = UDim2.new(1, -60, 0, 18)
-        Label.BackgroundTransparency = 1
-        Label.Text = text
-        Label.TextColor3 = Color3.fromRGB(200, 200, 200)
-        Label.TextSize = 13
-        Label.Font = Enum.Font.Gotham
-        Label.TextXAlignment = Enum.TextXAlignment.Left
-        Label.Parent = Slider
-        
-        local ValueLabel = Instance.new("TextLabel")
-        ValueLabel.Size = UDim2.new(0, 50, 0, 18)
-        ValueLabel.Position = UDim2.new(1, -50, 0, 0)
-        ValueLabel.BackgroundTransparency = 1
-        ValueLabel.Text = tostring(Settings[setting]) .. (suffix or "")
-        ValueLabel.TextColor3 = Color3.fromRGB(168, 85, 247)
-        ValueLabel.TextSize = 12
-        ValueLabel.Font = Enum.Font.GothamBold
-        ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
-        ValueLabel.Parent = Slider
-        
-        local Bar = Instance.new("Frame")
-        Bar.Size = UDim2.new(1, 0, 0, 6)
-        Bar.Position = UDim2.new(0, 0, 1, -10)
-        Bar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-        Bar.BorderSizePixel = 0
-        Bar.Parent = Slider
-        
-        local BarCorner = Instance.new("UICorner")
-        BarCorner.CornerRadius = UDim.new(1, 0)
-        BarCorner.Parent = Bar
-        
-        local Fill = Instance.new("Frame")
-        Fill.Size = UDim2.new((Settings[setting] - min) / (max - min), 0, 1, 0)
-        Fill.BackgroundColor3 = Color3.fromRGB(168, 85, 247)
-        Fill.BorderSizePixel = 0
-        Fill.Parent = Bar
-        
-        local FillCorner = Instance.new("UICorner")
-        FillCorner.CornerRadius = UDim.new(1, 0)
-        FillCorner.Parent = Fill
-        
-        local Button = Instance.new("TextButton")
-        Button.Size = UDim2.new(1, 0, 1, 0)
-        Button.BackgroundTransparency = 1
-        Button.Text = ""
-        Button.Parent = Bar
-        
-        local dragging = false
-        
-        Button.MouseButton1Down:Connect(function()
-            dragging = true
-        end)
-        
-        UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                dragging = false
-            end
-        end)
-        
-        UserInputService.InputChanged:Connect(function(input)
-            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                local pos = math.clamp((input.Position.X - Bar.AbsolutePosition.X) / Bar.AbsoluteSize.X, 0, 1)
-                local value = math.floor(min + (max - min) * pos + 0.5)
-                Settings[setting] = value
-                ValueLabel.Text = tostring(value) .. (suffix or "")
-                Fill.Size = UDim2.new(pos, 0, 1, 0)
-                if callback then callback(value) end
-            end
-        end)
-        
-        return Slider
+})
+
+MiscGroup:AddToggle("DoorReach", {
+    Text = "Door Reach",
+    Tooltip = "Extended door interaction range",
+    Default = Settings.DoorReach,
+    Callback = function(Value)
+        Settings.DoorReach = Value
     end
-    
-    local function CreateColorPicker(parent, text, setting)
-        local Picker = Instance.new("Frame")
-        Picker.Size = UDim2.new(1, 0, 0, 30)
-        Picker.BackgroundTransparency = 1
-        Picker.Parent = parent
-        
-        local Label = Instance.new("TextLabel")
-        Label.Size = UDim2.new(1, -50, 1, 0)
-        Label.BackgroundTransparency = 1
-        Label.Text = text
-        Label.TextColor3 = Color3.fromRGB(200, 200, 200)
-        Label.TextSize = 13
-        Label.Font = Enum.Font.Gotham
-        Label.TextXAlignment = Enum.TextXAlignment.Left
-        Label.Parent = Picker
-        
-        local ColorBox = Instance.new("Frame")
-        ColorBox.Size = UDim2.new(0, 25, 0, 25)
-        ColorBox.Position = UDim2.new(1, -30, 0.5, -12.5)
-        ColorBox.BackgroundColor3 = Settings[setting]
-        ColorBox.BorderSizePixel = 0
-        ColorBox.Parent = Picker
-        
-        local BoxCorner = Instance.new("UICorner")
-        BoxCorner.CornerRadius = UDim.new(0, 4)
-        BoxCorner.Parent = ColorBox
-        
-        return Picker
+})
+
+local AutoGroup = Tabs.Main:AddLeftGroupbox("Automation", "zap")
+
+AutoGroup:AddToggle("AutoPlayAgain", {
+    Text = "Auto Play Again",
+    Tooltip = "Automatically restarts the game",
+    Default = Settings.AutoPlayAgain,
+    Callback = function(Value)
+        Settings.AutoPlayAgain = Value
     end
-    
-    -- ============================================
-    -- CREATE PAGES
-    -- ============================================
-    
-    local Pages = {}
-    
-    local function CreatePage(name)
-        local Page = Instance.new("ScrollingFrame")
-        Page.Name = name
-        Page.Size = UDim2.new(1, -10, 1, -10)
-        Page.Position = UDim2.new(0, 5, 0, 5)
-        Page.BackgroundTransparency = 1
-        Page.BorderSizePixel = 0
-        Page.ScrollBarThickness = 4
-        Page.ScrollBarImageColor3 = Color3.fromRGB(168, 85, 247)
-        Page.CanvasSize = UDim2.new(0, 0, 0, 0)
-        Page.Visible = false
-        Page.Parent = ContentArea
-        
-        local Grid = Instance.new("UIGridLayout")
-        Grid.CellSize = UDim2.new(0.48, 0, 0, 0)
-        Grid.CellPadding = UDim2.new(0.02, 0, 0, 10)
-        Grid.Parent = Page
-        
-        Pages[name] = Page
-        return Page
+})
+
+AutoGroup:AddToggle("AutoLobby", {
+    Text = "Auto Lobby",
+    Tooltip = "Automatically returns to lobby",
+    Default = Settings.AutoLobby,
+    Callback = function(Value)
+        Settings.AutoLobby = Value
     end
-    
-    -- Create sidebar navigation
-    local MainBtn, MainLabel = CreateSidebarButton("Main", "")
-    local PlayerBtn, PlayerLabel = CreateSidebarButton("Player", "")
-    local VisualsBtn, VisualsLabel = CreateSidebarButton("Visuals", "")
-    local MiscBtn, MiscLabel = CreateSidebarButton("Misc", "")
-    
-    -- Create pages
-    local MainPage = CreatePage("Main")
-    local PlayerPage = CreatePage("Player")
-    local VisualsPage = CreatePage("Visuals")
-    local MiscPage = CreatePage("Misc")
-    
-    -- ============================================
-    -- MAIN PAGE CONTENT
-    -- ============================================
-    
-    local MiscSection, MiscContainer = CreateSection(MainPage, "Miscellaneous")
-    CreateToggle(MiscContainer, "Instant Proximity Prompt", "InstantInteract")
-    CreateToggle(MiscContainer, "break ROBLOX Void", "BreakVoid")
-    CreateToggle(MiscContainer, "No cutscenes", "NoCutscenes")
-    CreateToggle(MiscContainer, "Door Reach", "DoorReach")
-    
-    local AutoSection, AutoContainer = CreateSection(MainPage, "Automation")
-    CreateToggle(AutoContainer, "Auto Play Again", "AutoPlayAgain")
-    CreateToggle(AutoContainer, "Auto Lobby", "AutoLobby")
-    CreateToggle(AutoContainer, "Auto Library Code", "AutoLibraryCode")
-    CreateToggle(AutoContainer, "Auto Breaker Box", "AutoBreakerBox")
-    
-    local NotifySection, NotifyContainer = CreateSection(MainPage, "Notifiers")
-    CreateToggle(NotifyContainer, "Notification sound", "NotificationSound")
-    CreateToggle(NotifyContainer, "Notify Entities", "EntityNotify")
-    CreateToggle(NotifyContainer, "Notify in Chat", "NotifyInChat")
-    
-    local AuraSection, AuraContainer = CreateSection(MainPage, "Auras")
-    CreateToggle(AuraContainer, "Lever/Valve Aura", "LeverValveAura")
-    CreateToggle(AuraContainer, "Loot Aura", "LootAura")
-    CreateToggle(AuraContainer, "Auto Collect Books/Breaker", "AutoCollectBooks")
-    CreateToggle(AuraContainer, "Locked Door Aura", "LockedDoorAura")
-    
-    -- ============================================
-    -- PLAYER PAGE CONTENT
-    -- ============================================
-    
-    local MovementSection, MovementContainer = CreateSection(PlayerPage, "Movement")
-    CreateSlider(MovementContainer, "Noclip Bypass Speed", "NoclipBypassSpeed", 0, 6, "/6")
-    CreateToggle(MovementContainer, "Speed Boost Enabled", "SpeedBoost")
-    CreateToggle(MovementContainer, "Speed Bypass", "SpeedBypass")
-    CreateToggle(MovementContainer, "No Acceleration", "NoAcceleration")
-    CreateToggle(MovementContainer, "Fly", "Fly")
-    CreateSlider(MovementContainer, "Fly Speed", "FlySpeed", 0, 5, "/5")
-    CreateToggle(MovementContainer, "teleport", "TeleportEnabled")
-    CreateSlider(MovementContainer, "teleport distance", "TeleportDistance", 1, 25, "/25")
-    
-    local CharacterSection, CharacterContainer = CreateSection(PlayerPage, "Character")
-    CreateToggle(CharacterContainer, "NoClip", "Noclip")
-    CreateToggle(CharacterContainer, "Enable jump", "EnableJump")
-    CreateToggle(CharacterContainer, "Infinite Jump", "InfiniteJump")
-    CreateToggle(CharacterContainer, "Closet exit Fix", "ClosetExitFix")
-    
-    -- ============================================
-    -- VISUALS PAGE CONTENT
-    -- ============================================
-    
-    local CameraSection, CameraContainer = CreateSection(VisualsPage, "Camera")
-    CreateSlider(CameraContainer, "FOV", "FOV", 30, 120, "/120")
-    CreateToggle(CameraContainer, "No camera shaking", "NoCameraShaking")
-    CreateToggle(CameraContainer, "Freecam", "Freecam")
-    CreateToggle(CameraContainer, "Third Person", "ThirdPerson")
-    CreateSlider(CameraContainer, "Third Offset", "ThirdOffset", 0, 10, "/10")
-    CreateSlider(CameraContainer, "Third Height", "ThirdHeight", 0, 10, "/10")
-    CreateSlider(CameraContainer, "Third Distance", "ThirdDistance", 5, 20, "/20")
-    CreateSlider(CameraContainer, "Third Sensitivity", "ThirdSensitivity", 1, 10, "/10")
-    
-    local LightingSection, LightingContainer = CreateSection(VisualsPage, "Lighting")
-    CreateToggle(LightingContainer, "Fullbright", "Fullbright", function(val)
+})
+
+AutoGroup:AddToggle("AutoLibraryCode", {
+    Text = "Auto Library Code",
+    Tooltip = "Automatically solves library puzzle",
+    Default = Settings.AutoLibraryCode,
+    Callback = function(Value)
+        Settings.AutoLibraryCode = Value
+    end
+})
+
+AutoGroup:AddToggle("AutoBreakerBox", {
+    Text = "Auto Breaker Box",
+    Tooltip = "Automatically solves breaker puzzle",
+    Default = Settings.AutoBreakerBox,
+    Callback = function(Value)
+        Settings.AutoBreakerBox = Value
+    end
+})
+
+local NotifyGroup = Tabs.Main:AddRightGroupbox("Notifiers", "bell")
+
+NotifyGroup:AddToggle("NotificationSound", {
+    Text = "Notification sound",
+    Tooltip = "Plays sound on entity spawn",
+    Default = Settings.NotificationSound,
+    Callback = function(Value)
+        Settings.NotificationSound = Value
+    end
+})
+
+NotifyGroup:AddToggle("EntityNotify", {
+    Text = "Notify Entities",
+    Tooltip = "Shows entity warnings",
+    Default = Settings.EntityNotify,
+    Callback = function(Value)
+        Settings.EntityNotify = Value
+    end
+})
+
+NotifyGroup:AddToggle("NotifyInChat", {
+    Text = "Notify in Chat",
+    Tooltip = "Sends entity notifications to chat",
+    Default = Settings.NotifyInChat,
+    Callback = function(Value)
+        Settings.NotifyInChat = Value
+    end
+})
+
+NotifyGroup:AddDivider()
+
+NotifyGroup:AddToggle("ScreechProtection", {
+    Text = "Screech Protection",
+    Tooltip = "Blocks Screech damage",
+    Default = Settings.ScreechProtection,
+    Callback = function(Value)
+        Settings.ScreechProtection = Value
+    end
+})
+
+local AuraGroup = Tabs.Main:AddRightGroupbox("Auras", "sparkles")
+
+AuraGroup:AddToggle("LeverValveAura", {
+    Text = "Lever/Valve Aura",
+    Tooltip = "Automatically activates levers/valves",
+    Default = Settings.LeverValveAura,
+    Callback = function(Value)
+        Settings.LeverValveAura = Value
+    end
+})
+
+AuraGroup:AddToggle("LootAura", {
+    Text = "Loot Aura",
+    Tooltip = "Automatically collects loot",
+    Default = Settings.LootAura,
+    Callback = function(Value)
+        Settings.LootAura = Value
+    end
+})
+
+AuraGroup:AddToggle("AutoCollectBooks", {
+    Text = "Auto Collect Books/Breaker",
+    Tooltip = "Automatically collects books and breaker items",
+    Default = Settings.AutoCollectBooks,
+    Callback = function(Value)
+        Settings.AutoCollectBooks = Value
+    end
+})
+
+AuraGroup:AddToggle("LockedDoorAura", {
+    Text = "Locked Door Aura",
+    Tooltip = "Automatically opens locked doors",
+    Default = Settings.LockedDoorAura,
+    Callback = function(Value)
+        Settings.LockedDoorAura = Value
+    end
+})
+
+-- ============================================
+-- ESP TAB
+-- ============================================
+
+local ESPGeneralGroup = Tabs.ESP:AddLeftGroupbox("ESP General", "scan")
+
+ESPGeneralGroup:AddToggle("UseAdornments", {
+    Text = "Use Adornments",
+    Tooltip = "Uses adornment-based ESP",
+    Default = Settings.UseAdornments,
+    Callback = function(Value)
+        Settings.UseAdornments = Value
+    end
+})
+
+ESPGeneralGroup:AddToggle("RainbowESP", {
+    Text = "Rainbow ESP Enabled",
+    Tooltip = "Makes ESP colors cycle through rainbow",
+    Default = Settings.RainbowESP,
+    Callback = function(Value)
+        Settings.RainbowESP = Value
+    end
+})
+
+ESPGeneralGroup:AddDivider()
+
+ESPGeneralGroup:AddToggle("EntityESP", {
+    Text = "Entity ESP enabled",
+    Default = Settings.EntityESP,
+    Callback = function(Value)
+        Settings.EntityESP = Value
+    end
+}):AddColorPicker("EntityESPColor", {
+    Default = Settings.EntityESPColor,
+    Title = "Entity ESP Color",
+    Callback = function(Value)
+        Settings.EntityESPColor = Value
+    end
+})
+
+ESPGeneralGroup:AddToggle("PlayerESP", {
+    Text = "Player ESP enabled",
+    Default = Settings.PlayerESP,
+    Callback = function(Value)
+        Settings.PlayerESP = Value
+    end
+}):AddColorPicker("PlayerESPColor", {
+    Default = Settings.PlayerESPColor,
+    Title = "Player ESP Color",
+    Callback = function(Value)
+        Settings.PlayerESPColor = Value
+    end
+})
+
+local ESPItemsGroup = Tabs.ESP:AddRightGroupbox("ESP Items", "package")
+
+ESPItemsGroup:AddToggle("DoorESP", {
+    Text = "Door ESP enabled",
+    Default = Settings.DoorESP,
+    Callback = function(Value)
+        Settings.DoorESP = Value
+    end
+}):AddColorPicker("DoorESPColor", {
+    Default = Settings.DoorESPColor,
+    Title = "Door ESP Color",
+    Callback = function(Value)
+        Settings.DoorESPColor = Value
+    end
+})
+
+ESPItemsGroup:AddToggle("ClosetESP", {
+    Text = "Closet ESP enabled",
+    Default = Settings.ClosetESP,
+    Callback = function(Value)
+        Settings.ClosetESP = Value
+    end
+}):AddColorPicker("ClosetESPColor", {
+    Default = Settings.ClosetESPColor,
+    Title = "Closet ESP Color",
+    Callback = function(Value)
+        Settings.ClosetESPColor = Value
+    end
+})
+
+ESPItemsGroup:AddToggle("ItemESP", {
+    Text = "Item ESP enabled",
+    Default = Settings.ItemESP,
+    Callback = function(Value)
+        Settings.ItemESP = Value
+    end
+}):AddColorPicker("ItemESPColor", {
+    Default = Settings.ItemESPColor,
+    Title = "Item ESP Color",
+    Callback = function(Value)
+        Settings.ItemESPColor = Value
+    end
+})
+
+ESPItemsGroup:AddToggle("ObjectiveESP", {
+    Text = "Objective ESP enabled",
+    Default = Settings.ObjectiveESP,
+    Callback = function(Value)
+        Settings.ObjectiveESP = Value
+    end
+}):AddColorPicker("ObjectiveESPColor", {
+    Default = Settings.ObjectiveESPColor,
+    Title = "Objective ESP Color",
+    Callback = function(Value)
+        Settings.ObjectiveESPColor = Value
+    end
+})
+
+ESPItemsGroup:AddToggle("GoldESP", {
+    Text = "Gold ESP enabled",
+    Default = Settings.GoldESP,
+    Callback = function(Value)
+        Settings.GoldESP = Value
+    end
+}):AddColorPicker("GoldESPColor", {
+    Default = Settings.GoldESPColor,
+    Title = "Gold ESP Color",
+    Callback = function(Value)
+        Settings.GoldESPColor = Value
+    end
+})
+
+ESPItemsGroup:AddToggle("KeyESP", {
+    Text = "Key ESP enabled",
+    Default = Settings.KeyESP,
+    Callback = function(Value)
+        Settings.KeyESP = Value
+    end
+}):AddColorPicker("KeyESPColor", {
+    Default = Settings.KeyESPColor,
+    Title = "Key ESP Color",
+    Callback = function(Value)
+        Settings.KeyESPColor = Value
+    end
+})
+
+-- ============================================
+-- PLAYER TAB
+-- ============================================
+
+local MovementGroup = Tabs.Player:AddLeftGroupbox("Movement", "move")
+
+MovementGroup:AddSlider("NoclipBypassSpeed", {
+    Text = "Noclip Bypass Speed",
+    Default = Settings.NoclipBypassSpeed,
+    Min = 0,
+    Max = 6,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        Settings.NoclipBypassSpeed = Value
+    end
+})
+
+MovementGroup:AddToggle("SpeedBoost", {
+    Text = "Speed Boost Enabled",
+    Default = Settings.SpeedBoost,
+    Callback = function(Value)
+        Settings.SpeedBoost = Value
+    end
+})
+
+MovementGroup:AddToggle("SpeedBypass", {
+    Text = "Speed Bypass",
+    Default = Settings.SpeedBypass,
+    Callback = function(Value)
+        Settings.SpeedBypass = Value
+    end
+})
+
+MovementGroup:AddToggle("NoAcceleration", {
+    Text = "No Acceleration",
+    Default = Settings.NoAcceleration,
+    Callback = function(Value)
+        Settings.NoAcceleration = Value
+    end
+})
+
+MovementGroup:AddDivider()
+
+MovementGroup:AddToggle("Fly", {
+    Text = "Fly",
+    Default = Settings.Fly,
+    Callback = function(Value)
+        Settings.Fly = Value
+    end
+})
+
+MovementGroup:AddSlider("FlySpeed", {
+    Text = "Fly Speed",
+    Default = Settings.FlySpeed,
+    Min = 0,
+    Max = 5,
+    Rounding = 1,
+    Compact = false,
+    Callback = function(Value)
+        Settings.FlySpeed = Value
+    end
+})
+
+MovementGroup:AddDivider()
+
+MovementGroup:AddToggle("TeleportEnabled", {
+    Text = "teleport",
+    Default = Settings.TeleportEnabled,
+    Callback = function(Value)
+        Settings.TeleportEnabled = Value
+    end
+})
+
+MovementGroup:AddSlider("TeleportDistance", {
+    Text = "teleport distance",
+    Default = Settings.TeleportDistance,
+    Min = 1,
+    Max = 25,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        Settings.TeleportDistance = Value
+    end
+})
+
+local CharacterGroup = Tabs.Player:AddRightGroupbox("Character", "user-check")
+
+CharacterGroup:AddToggle("Noclip", {
+    Text = "NoClip",
+    Default = Settings.Noclip,
+    Callback = function(Value)
+        Settings.Noclip = Value
+    end
+})
+
+CharacterGroup:AddToggle("EnableJump", {
+    Text = "Enable jump",
+    Default = Settings.EnableJump,
+    Callback = function(Value)
+        Settings.EnableJump = Value
+    end
+})
+
+CharacterGroup:AddToggle("InfiniteJump", {
+    Text = "Infinite Jump",
+    Default = Settings.InfiniteJump,
+    Callback = function(Value)
+        Settings.InfiniteJump = Value
+    end
+})
+
+CharacterGroup:AddToggle("ClosetExitFix", {
+    Text = "Closet exit Fix",
+    Default = Settings.ClosetExitFix,
+    Callback = function(Value)
+        Settings.ClosetExitFix = Value
+    end
+})
+
+-- ============================================
+-- VISUALS TAB
+-- ============================================
+
+local CameraGroup = Tabs.Visuals:AddLeftGroupbox("Camera", "camera")
+
+CameraGroup:AddSlider("FOV", {
+    Text = "FOV",
+    Default = Settings.FOV,
+    Min = 30,
+    Max = 120,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        Settings.FOV = Value
+        workspace.CurrentCamera.FieldOfView = Value
+    end
+})
+
+CameraGroup:AddToggle("NoCameraShaking", {
+    Text = "No camera shaking",
+    Default = Settings.NoCameraShaking,
+    Callback = function(Value)
+        Settings.NoCameraShaking = Value
+    end
+})
+
+CameraGroup:AddToggle("Freecam", {
+    Text = "Freecam",
+    Default = Settings.Freecam,
+    Callback = function(Value)
+        Settings.Freecam = Value
+    end
+})
+
+CameraGroup:AddDivider()
+
+CameraGroup:AddToggle("ThirdPerson", {
+    Text = "Third Person",
+    Default = Settings.ThirdPerson,
+    Callback = function(Value)
+        Settings.ThirdPerson = Value
+    end
+})
+
+CameraGroup:AddSlider("ThirdOffset", {
+    Text = "Third Offset",
+    Default = Settings.ThirdOffset,
+    Min = 0,
+    Max = 10,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        Settings.ThirdOffset = Value
+    end
+})
+
+CameraGroup:AddSlider("ThirdHeight", {
+    Text = "Third Height",
+    Default = Settings.ThirdHeight,
+    Min = 0,
+    Max = 10,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        Settings.ThirdHeight = Value
+    end
+})
+
+CameraGroup:AddSlider("ThirdDistance", {
+    Text = "Third Distance",
+    Default = Settings.ThirdDistance,
+    Min = 5,
+    Max = 20,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        Settings.ThirdDistance = Value
+    end
+})
+
+CameraGroup:AddSlider("ThirdSensitivity", {
+    Text = "Third Sensitivity",
+    Default = Settings.ThirdSensitivity,
+    Min = 1,
+    Max = 10,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        Settings.ThirdSensitivity = Value
+    end
+})
+
+local LightingGroup = Tabs.Visuals:AddRightGroupbox("Lighting", "sun")
+
+LightingGroup:AddToggle("Fullbright", {
+    Text = "Fullbright",
+    Default = Settings.Fullbright,
+    Callback = function(Value)
+        Settings.Fullbright = Value
         local Lighting = game:GetService("Lighting")
-        if val then
+        if Value then
             Lighting.Brightness = Settings.Brightness
             Lighting.Ambient = Color3.new(1, 1, 1)
             Lighting.FogEnd = 100000
@@ -628,132 +656,91 @@ local function CreateGUI()
             Lighting.Ambient = Color3.new(0, 0, 0)
             Lighting.FogEnd = 500
         end
-    end)
-    CreateSlider(LightingContainer, "Brightness", "Brightness", 1, 10, "/10", function(val)
+    end
+})
+
+LightingGroup:AddSlider("Brightness", {
+    Text = "Brightness",
+    Default = Settings.Brightness,
+    Min = 1,
+    Max = 10,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        Settings.Brightness = Value
         if Settings.Fullbright then
-            game:GetService("Lighting").Brightness = val
+            game:GetService("Lighting").Brightness = Value
         end
-    end)
-    
-    local ESPSection, ESPContainer = CreateSection(VisualsPage, "ESP Settings")
-    CreateToggle(ESPContainer, "Use Adornments", "UseAdornments")
-    CreateToggle(ESPContainer, "Rainbow ESP Enabled", "RainbowESP")
-    CreateToggle(ESPContainer, "Entity ESP enabled", "EntityESP")
-    CreateColorPicker(ESPContainer, "Entity ESP color", "EntityESPColor")
-    CreateToggle(ESPContainer, "Player ESP enabled", "PlayerESP")
-    CreateColorPicker(ESPContainer, "Player ESP color", "PlayerESPColor")
-    CreateToggle(ESPContainer, "Door ESP enabled", "DoorESP")
-    CreateColorPicker(ESPContainer, "Door ESP color", "DoorESPColor")
-    CreateToggle(ESPContainer, "Closet ESP enabled", "ClosetESP")
-    CreateColorPicker(ESPContainer, "Closet ESP color", "ClosetESPColor")
-    CreateToggle(ESPContainer, "Item ESP enabled", "ItemESP")
-    CreateColorPicker(ESPContainer, "Item ESP color", "ItemESPColor")
-    CreateToggle(ESPContainer, "Objective ESP enabled", "ObjectiveESP")
-    CreateColorPicker(ESPContainer, "Objective ESP color", "ObjectiveESPColor")
-    CreateToggle(ESPContainer, "Gold ESP enabled", "GoldESP")
-    CreateColorPicker(ESPContainer, "Gold ESP color", "GoldESPColor")
-    
-    -- ============================================
-    -- MISC PAGE (placeholder)
-    -- ============================================
-    
-    local PlaceholderSection, PlaceholderContainer = CreateSection(MiscPage, "Coming Soon")
-    local PlaceholderText = Instance.new("TextLabel")
-    PlaceholderText.Size = UDim2.new(1, 0, 0, 50)
-    PlaceholderText.BackgroundTransparency = 1
-    PlaceholderText.Text = "More features coming soon!"
-    PlaceholderText.TextColor3 = Color3.fromRGB(150, 150, 150)
-    PlaceholderText.TextSize = 14
-    PlaceholderText.Font = Enum.Font.Gotham
-    PlaceholderText.Parent = PlaceholderContainer
-    
-    -- ============================================
-    -- TAB SWITCHING
-    -- ============================================
-    
-    local currentPage = MainPage
-    
-    local function SwitchPage(button, label, page)
-        -- Deselect all
-        for _, btn in pairs({MainBtn, PlayerBtn, VisualsBtn, MiscBtn}) do
-            TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 30)}):Play()
-        end
-        for _, lbl in pairs({MainLabel, PlayerLabel, VisualsLabel, MiscLabel}) do
-            lbl.TextColor3 = Color3.fromRGB(150, 150, 150)
-        end
-        
-        -- Select current
-        TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(168, 85, 247)}):Play()
-        label.TextColor3 = Color3.fromRGB(255, 255, 255)
-        
-        -- Hide all pages
-        for _, p in pairs(Pages) do
-            p.Visible = false
-        end
-        
-        page.Visible = true
-        currentPage = page
-        
-        -- Update canvas size
-        task.wait(0.1)
-        page.CanvasSize = UDim2.new(0, 0, 0, page.UIGridLayout.AbsoluteContentSize.Y + 10)
     end
-    
-    MainBtn.MouseButton1Click:Connect(function() SwitchPage(MainBtn, MainLabel, MainPage) end)
-    PlayerBtn.MouseButton1Click:Connect(function() SwitchPage(PlayerBtn, PlayerLabel, PlayerPage) end)
-    VisualsBtn.MouseButton1Click:Connect(function() SwitchPage(VisualsBtn, VisualsLabel, VisualsPage) end)
-    MiscBtn.MouseButton1Click:Connect(function() SwitchPage(MiscBtn, MiscLabel, MiscPage) end)
-    
-    -- Default page
-    SwitchPage(MainBtn, MainLabel, MainPage)
-    
-    -- Update canvas sizes
-    for _, page in pairs(Pages) do
-        page.UIGridLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-            page.CanvasSize = UDim2.new(0, 0, 0, page.UIGridLayout.AbsoluteContentSize.Y + 10)
-        end)
+})
+
+-- ============================================
+-- UI SETTINGS TAB
+-- ============================================
+
+local MenuGroup = Tabs.Settings:AddLeftGroupbox("Menu", "settings")
+
+MenuGroup:AddToggle("KeybindMenuOpen", {
+    Default = Library.KeybindFrame.Visible,
+    Text = "Open Keybind Menu",
+    Callback = function(value)
+        Library.KeybindFrame.Visible = value
     end
-    
-    -- Toggle GUI with Right Ctrl
-    UserInputService.InputBegan:Connect(function(input, processed)
-        if not processed and input.KeyCode == Enum.KeyCode.RightControl then
-            VesperGUI.Enabled = not VesperGUI.Enabled
-            
-            if VesperGUI.Enabled then
-                UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-                UserInputService.MouseIconEnabled = true
-            else
-                UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-            end
-        end
-    end)
-    
-    -- Animate GUI in
-    MainFrame.Size = UDim2.new(0, 0, 0, 0)
-    MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-    VesperGUI.Parent = LocalPlayer.PlayerGui
-    
-    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-    UserInputService.MouseIconEnabled = true
-    
-    TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = UDim2.new(0, 850, 0, 550),
-        Position = UDim2.new(0.5, -425, 0.5, -275)
-    }):Play()
-    
-    return VesperGUI
-end
+})
 
+MenuGroup:AddToggle("ShowCustomCursor", {
+    Text = "Custom Cursor",
+    Default = true,
+    Callback = function(Value)
+        Library.ShowCustomCursor = Value
+    end
+})
 
--- Initialize GUI
-local GUI = CreateGUI()
-warn("vesper.lua GUI loaded! Press Right Ctrl to toggle")
+MenuGroup:AddDropdown("NotificationSide", {
+    Values = {"Left", "Right"},
+    Default = "Right",
+    Text = "Notification Side",
+    Callback = function(Value)
+        Library:SetNotifySide(Value)
+    end
+})
 
--- Update old Settings references
-Settings.EntityNotify = Settings.EntityNotify
-Settings.DoorESP = Settings.DoorESP
-Settings.KeyESP = Settings.KeyESP
-Settings.ItemESP = Settings.ItemESP
+MenuGroup:AddDivider()
+
+MenuGroup:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", {
+    Default = "RightShift",
+    NoUI = true,
+    Text = "Menu keybind"
+})
+
+MenuGroup:AddButton("Unload", function()
+    Library:Unload()
+end)
+
+Library.ToggleKeybind = Options.MenuKeybind
+
+-- Setup theme and save managers
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({"MenuKeybind"})
+
+ThemeManager:SetFolder("vesper")
+SaveManager:SetFolder("vesper/DOORS")
+
+SaveManager:BuildConfigSection(Tabs.Settings)
+ThemeManager:ApplyToTab(Tabs.Settings)
+
+-- Notification on load
+Library:Notify({
+    Title = "vesper.lua loaded!",
+    Description = "DOORS script ready | Press RightShift to toggle menu",
+    Time = 5
+})
+
+-- GUI is already initialized by Obsidian library above
+warn("vesper.lua loaded! Press RightShift to toggle menu")
 
 -- Track opened doors
 local openedDoors = {}
