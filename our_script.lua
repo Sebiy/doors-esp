@@ -80,8 +80,12 @@ local function ApplyDoorESP(room)
     local fillColor = isLocked and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50)
     local outlineColor = isLocked and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(0, 200, 0)
     
-    -- Apply highlight to the entire Door model
-    CreateHighlight(door, fillColor, outlineColor, 0.4, 0)
+    -- Apply highlight only to visible door parts (not collision/hitboxes)
+    for _, part in pairs(door:GetDescendants()) do
+        if part:IsA("BasePart") and part.Transparency < 1 and not part.Name:find("Collision") and not part.Name:find("Hitbox") then
+            CreateHighlight(part, fillColor, outlineColor, 0.4, 0)
+        end
+    end
     
     -- Create billboard (add +1 to match in-game door numbers)
     local displayNumber = roomNumber + 1
@@ -305,31 +309,317 @@ task.spawn(function()
     end
 end)
 
--- Entity Notifications
-if Settings.EntityNotify then
+-- Create entity notification UI
+local function createNotificationUI()
+    local NotificationGui = Instance.new("ScreenGui")
+    NotificationGui.Name = "EntityNotifications"
+    NotificationGui.ResetOnSpawn = false
+    NotificationGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    NotificationGui.Parent = LocalPlayer.PlayerGui
+
+    local WarningFrame = Instance.new("Frame")
+    WarningFrame.Name = "WarningFrame"
+    WarningFrame.AnchorPoint = Vector2.new(0.5, 0)
+    WarningFrame.BackgroundColor3 = Color3.fromRGB(20, 0, 0)
+    WarningFrame.BackgroundTransparency = 0.1
+    WarningFrame.BorderSizePixel = 0
+    WarningFrame.Position = UDim2.new(0.5, 0, 0.1, 0)
+    WarningFrame.Size = UDim2.new(0.4, 0, 0.1, 0)
+    WarningFrame.Visible = false
+    WarningFrame.Parent = NotificationGui
+
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 12)
+    UICorner.Parent = WarningFrame
+
+    local WarningText = Instance.new("TextLabel")
+    WarningText.Name = "WarningText"
+    WarningText.BackgroundTransparency = 1
+    WarningText.Size = UDim2.new(1, 0, 0.5, 0)
+    WarningText.Font = Enum.Font.GothamBold
+    WarningText.TextColor3 = Color3.fromRGB(255, 80, 80)
+    WarningText.TextSize = 24
+    WarningText.Text = "⚠️ ENTITY DETECTED ⚠️"
+    WarningText.Parent = WarningFrame
+
+    local EntityName = Instance.new("TextLabel")
+    EntityName.Name = "EntityName"
+    EntityName.BackgroundTransparency = 1
+    EntityName.Position = UDim2.new(0, 0, 0.5, 0)
+    EntityName.Size = UDim2.new(1, 0, 0.5, 0)
+    EntityName.Font = Enum.Font.GothamSemibold
+    EntityName.TextColor3 = Color3.fromRGB(255, 255, 255)
+    EntityName.TextSize = 20
+    EntityName.Text = ""
+    EntityName.Parent = WarningFrame
+
+    return NotificationGui
+end
+
+local NotificationUI = createNotificationUI()
+
+-- Show entity warning
+local function showEntityWarning(entityName, duration)
+    local WarningFrame = NotificationUI.WarningFrame
+    WarningFrame.EntityName.Text = entityName
+    WarningFrame.Visible = true
+    WarningFrame.Position = UDim2.new(0.5, 0, -0.15, 0)
+    WarningFrame:TweenPosition(
+        UDim2.new(0.5, 0, 0.1, 0),
+        Enum.EasingDirection.Out,
+        Enum.EasingStyle.Back,
+        0.5,
+        true
+    )
+    task.delay(duration or 5, function()
+        WarningFrame:TweenPosition(
+            UDim2.new(0.5, 0, -0.15, 0),
+            Enum.EasingDirection.In,
+            Enum.EasingStyle.Back,
+            0.5,
+            true,
+            function()
+                WarningFrame.Visible = false
+            end
+        )
+    end)
+end
+
+-- Entity ESP Folder
+local ESPFolder = Instance.new("Folder")
+ESPFolder.Name = "EntityESP"
+ESPFolder.Parent = Workspace
+
+-- Rush detection and ESP
+local function setupRushDetection()
+    local function checkForRush()
+        local RushModel = Workspace:FindFirstChild("RushMoving")
+        if RushModel and not RushModel:GetAttribute("ESPAdded") then
+            local rushColor = Color3.fromRGB(255, 25, 25)
+            task.spawn(function()
+                showEntityWarning("RUSH - HIDE IMMEDIATELY!", 5)
+                warn("⚠️ RUSH SPAWNED!")
+                RushModel:SetAttribute("ESPAdded", true)
+                while RushModel and RushModel.Parent do
+                    pcall(function()
+                        local playerPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position
+                        if playerPos then
+                            local rushPos = RushModel:GetPivot().Position
+                            local distance = (playerPos - rushPos).Magnitude
+                            local rushText = "⚠️ RUSH - " .. math.floor(distance) .. " studs ⚠️"
+                            for _, item in pairs(ESPFolder:GetChildren()) do
+                                if item:GetAttribute("RushESP") then item:Destroy() end
+                            end
+                            
+                            local highlight = Instance.new("Highlight")
+                            highlight:SetAttribute("RushESP", true)
+                            highlight.Adornee = RushModel
+                            highlight.FillColor = rushColor
+                            highlight.OutlineColor = Color3.new(1, 0, 0)
+                            highlight.FillTransparency = 0
+                            highlight.OutlineTransparency = 0
+                            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                            highlight.Parent = ESPFolder
+                            
+                            local billboard = Instance.new("BillboardGui")
+                            billboard:SetAttribute("RushESP", true)
+                            billboard.Adornee = RushModel
+                            billboard.Size = UDim2.new(0, 200, 0, 50)
+                            billboard.StudsOffset = Vector3.new(0, 5, 0)
+                            billboard.AlwaysOnTop = true
+                            billboard.Parent = ESPFolder
+                            
+                            local textLabel = Instance.new("TextLabel")
+                            textLabel.Size = UDim2.new(1, 0, 1, 0)
+                            textLabel.BackgroundTransparency = 1
+                            textLabel.TextColor3 = rushColor
+                            textLabel.TextStrokeTransparency = 0.2
+                            textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+                            textLabel.TextScaled = true
+                            textLabel.Font = Enum.Font.GothamBold
+                            textLabel.Text = rushText
+                            textLabel.Parent = billboard
+                        end
+                    end)
+                    task.wait(0.1)
+                end
+            end)
+        end
+    end
+    
+    RunService.Heartbeat:Connect(checkForRush)
+    
     Workspace.ChildAdded:Connect(function(child)
         if child.Name == "RushMoving" then
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-                LocalPlayer.Character.Humanoid.WalkSpeed = 22
-            end
-            warn("⚠️ RUSH SPAWNED!")
-            task.wait(2)
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-                LocalPlayer.Character.Humanoid.WalkSpeed = 16
-            end
-        elseif child.Name == "AmbushMoving" then
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-                LocalPlayer.Character.Humanoid.WalkSpeed = 22
-            end
-            warn("⚠️ AMBUSH SPAWNED!")
-            task.wait(2)
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-                LocalPlayer.Character.Humanoid.WalkSpeed = 16
-            end
-        elseif child.Name == "Eyes" then
-            warn("👁️ EYES - LOOK AWAY!")
+            showEntityWarning("RUSH INCOMING - HIDE!", 5)
         end
     end)
+end
+
+-- Ambush detection and ESP
+local function setupAmbushDetection()
+    local function checkForAmbush()
+        local AmbushModel = Workspace:FindFirstChild("AmbushMoving")
+        if AmbushModel and not AmbushModel:GetAttribute("ESPAdded") then
+            local ambushColor = Color3.fromRGB(255, 100, 0)
+            task.spawn(function()
+                showEntityWarning("AMBUSH - HIDE AND STAY!", 5)
+                warn("⚠️ AMBUSH SPAWNED!")
+                AmbushModel:SetAttribute("ESPAdded", true)
+                while AmbushModel and AmbushModel.Parent do
+                    pcall(function()
+                        local playerPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position
+                        if playerPos then
+                            local ambushPos = AmbushModel:GetPivot().Position
+                            local distance = (playerPos - ambushPos).Magnitude
+                            local ambushText = "⚠️ AMBUSH - " .. math.floor(distance) .. " studs ⚠️"
+                            for _, item in pairs(ESPFolder:GetChildren()) do
+                                if item:GetAttribute("AmbushESP") then item:Destroy() end
+                            end
+                            
+                            local highlight = Instance.new("Highlight")
+                            highlight:SetAttribute("AmbushESP", true)
+                            highlight.Adornee = AmbushModel
+                            highlight.FillColor = ambushColor
+                            highlight.OutlineColor = Color3.new(1, 0.5, 0)
+                            highlight.FillTransparency = 0
+                            highlight.OutlineTransparency = 0
+                            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                            highlight.Parent = ESPFolder
+                            
+                            local billboard = Instance.new("BillboardGui")
+                            billboard:SetAttribute("AmbushESP", true)
+                            billboard.Adornee = AmbushModel
+                            billboard.Size = UDim2.new(0, 200, 0, 50)
+                            billboard.StudsOffset = Vector3.new(0, 5, 0)
+                            billboard.AlwaysOnTop = true
+                            billboard.Parent = ESPFolder
+                            
+                            local textLabel = Instance.new("TextLabel")
+                            textLabel.Size = UDim2.new(1, 0, 1, 0)
+                            textLabel.BackgroundTransparency = 1
+                            textLabel.TextColor3 = ambushColor
+                            textLabel.TextStrokeTransparency = 0.2
+                            textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+                            textLabel.TextScaled = true
+                            textLabel.Font = Enum.Font.GothamBold
+                            textLabel.Text = ambushText
+                            textLabel.Parent = billboard
+                        end
+                    end)
+                    task.wait(0.1)
+                end
+            end)
+        end
+    end
+    
+    RunService.Heartbeat:Connect(checkForAmbush)
+    
+    Workspace.ChildAdded:Connect(function(child)
+        if child.Name == "AmbushMoving" then
+            showEntityWarning("AMBUSH INCOMING!", 5)
+        end
+    end)
+end
+
+-- Eyes detection and ESP
+local function setupEyesDetection()
+    local function checkForEyes()
+        local EyesModel = Workspace:FindFirstChild("Eyes")
+        if EyesModel and not EyesModel:GetAttribute("ESPAdded") then
+            local eyesColor = Color3.fromRGB(255, 255, 0)
+            task.spawn(function()
+                showEntityWarning("EYES - DON'T LOOK!", 5)
+                warn("👁️ EYES SPAWNED!")
+                EyesModel:SetAttribute("ESPAdded", true)
+                while EyesModel and EyesModel.Parent do
+                    pcall(function()
+                        local playerPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position
+                        if playerPos then
+                            local eyesPos = EyesModel:GetPivot().Position
+                            local distance = (playerPos - eyesPos).Magnitude
+                            local eyesText = "👁️ EYES - " .. math.floor(distance) .. " studs"
+                            for _, item in pairs(ESPFolder:GetChildren()) do
+                                if item:GetAttribute("EyesESP") then item:Destroy() end
+                            end
+                            
+                            local highlight = Instance.new("Highlight")
+                            highlight:SetAttribute("EyesESP", true)
+                            highlight.Adornee = EyesModel
+                            highlight.FillColor = eyesColor
+                            highlight.OutlineColor = Color3.new(1, 1, 0)
+                            highlight.FillTransparency = 0
+                            highlight.OutlineTransparency = 0
+                            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                            highlight.Parent = ESPFolder
+                            
+                            local billboard = Instance.new("BillboardGui")
+                            billboard:SetAttribute("EyesESP", true)
+                            billboard.Adornee = EyesModel
+                            billboard.Size = UDim2.new(0, 200, 0, 50)
+                            billboard.StudsOffset = Vector3.new(0, 5, 0)
+                            billboard.AlwaysOnTop = true
+                            billboard.Parent = ESPFolder
+                            
+                            local textLabel = Instance.new("TextLabel")
+                            textLabel.Size = UDim2.new(1, 0, 1, 0)
+                            textLabel.BackgroundTransparency = 1
+                            textLabel.TextColor3 = eyesColor
+                            textLabel.TextStrokeTransparency = 0.2
+                            textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+                            textLabel.TextScaled = true
+                            textLabel.Font = Enum.Font.GothamBold
+                            textLabel.Text = eyesText
+                            textLabel.Parent = billboard
+                        end
+                    end)
+                    task.wait(0.1)
+                end
+            end)
+        end
+    end
+    
+    RunService.Heartbeat:Connect(checkForEyes)
+    
+    Workspace.ChildAdded:Connect(function(child)
+        if child.Name == "Eyes" then
+            showEntityWarning("EYES SPAWNED!", 5)
+        end
+    end)
+end
+
+-- Screech detection and deletion
+local function setupScreechProtection()
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local Entities = ReplicatedStorage:WaitForChild("Entities")
+    
+    local function deleteScreech()
+        local Screech = Entities:FindFirstChild("Screech")
+        if Screech then
+            Screech:Destroy()
+            warn("Screech deleted - You're safe!")
+            showEntityWarning("SCREECH BLOCKED", 3)
+        end
+    end
+    
+    task.spawn(function() deleteScreech() end)
+    
+    Entities.ChildAdded:Connect(function(child)
+        if child.Name == "Screech" then
+            child:Destroy()
+            warn("Screech blocked!")
+            showEntityWarning("SCREECH BLOCKED", 3)
+        end
+    end)
+end
+
+-- Initialize entity detection
+if Settings.EntityNotify then
+    setupRushDetection()
+    setupAmbushDetection()
+    setupEyesDetection()
+    setupScreechProtection()
+    warn("Entity detection and ESP enabled!")
 end
 
 -- Fullbright
