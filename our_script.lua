@@ -66,21 +66,11 @@ local function ApplyDoorESP(room)
     local door = room:WaitForChild("Door", 2)
     if not door then return end
     
-    -- Check if locked by looking for ProximityPrompt that requires a key
-    local isLocked = false
-    local lockPrompt = nil
+    -- Check if locked by looking for KeyObtain in the room
+    local key = room:FindFirstChild("KeyObtain", true)
+    local isLocked = (key ~= nil)
     
-    for _, descendant in pairs(door:GetDescendants()) do
-        if descendant:IsA("ProximityPrompt") then
-            if descendant.ObjectText and descendant.ObjectText:find("Key") then
-                isLocked = true
-                lockPrompt = descendant
-                break
-            end
-        end
-    end
-    
-    warn(string.format("Room %d - Locked: %s", roomNumber, tostring(isLocked)))
+    warn(string.format("Room %d - Locked: %s (Key present: %s)", roomNumber, tostring(isLocked), tostring(key ~= nil)))
     
     -- Colors
     local fillColor = isLocked and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50)
