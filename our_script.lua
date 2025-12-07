@@ -112,7 +112,7 @@ local Toggles = Library.Toggles
 local Window = Library:CreateWindow({
     Title = "vesper.lua",
     Footer = "version: v1.0 | made with ♥",
-    Icon = 95816097006870,
+    Icon = "rbxassetid://87962219786952", -- vesper.lua logo
     NotifySide = "Right",
     ShowCustomCursor = true,
     Center = true,
@@ -786,10 +786,10 @@ end
 
 -- Door ESP Function
 local function ApplyDoorESP(room)
-    if not Settings.DoorESP then return end
-    
     local roomNumber = tonumber(room.Name)
     if not roomNumber then return end
+    
+    if not Settings.DoorESP then return end
     
     local door = room:WaitForChild("Door", 2)
     if not door then return end
@@ -978,13 +978,13 @@ CurrentRooms.ChildAdded:Connect(function(room)
         end
         
         -- Lever detection
-        if descendant.Name == "LeverForGate" then
-            ApplyItemESP(descendant, "⚡ LEVER", Color3.fromRGB(0, 255, 0))
+        if descendant.Name == "LeverForGate" and Settings.ObjectiveESP then
+            ApplyItemESP(descendant, "⚡ LEVER", Settings.ObjectiveESPColor or Color3.fromRGB(168, 85, 247))
         end
         
         -- Coin detection
-        if descendant.Name == "GoldPile" then
-            ApplyItemESP(descendant, "💰 COINS", Color3.fromRGB(255, 215, 0))
+        if descendant.Name == "GoldPile" and Settings.GoldESP then
+            ApplyItemESP(descendant, "💰 COINS", Settings.GoldESPColor or Color3.fromRGB(255, 215, 0))
             AutoCollectCoin(descendant)
         end
     end)
@@ -995,16 +995,16 @@ local function ScanRoomForItems(room)
     local foundKey = false
     -- Check existing items (recursively search for KeyObtain)
     for _, descendant in pairs(room:GetDescendants()) do
-        if descendant.Name == "KeyObtain" then
+        if descendant.Name == "KeyObtain" and Settings.KeyESP then
             foundKey = true
             ApplyKeyESP(descendant)
             warn(string.format("Found existing key in room %s at path: %s", room.Name, descendant:GetFullName()))
         end
-        if descendant.Name == "LeverForGate" then
-            ApplyItemESP(descendant, "⚡ LEVER", Color3.fromRGB(0, 255, 0))
+        if descendant.Name == "LeverForGate" and Settings.ObjectiveESP then
+            ApplyItemESP(descendant, "⚡ LEVER", Settings.ObjectiveESPColor or Color3.fromRGB(168, 85, 247))
         end
-        if descendant.Name == "GoldPile" then
-            ApplyItemESP(descendant, "💰 COINS", Color3.fromRGB(255, 215, 0))
+        if descendant.Name == "GoldPile" and Settings.GoldESP then
+            ApplyItemESP(descendant, "💰 COINS", Settings.GoldESPColor or Color3.fromRGB(255, 215, 0))
             AutoCollectCoin(descendant)
         end
     end
@@ -1023,11 +1023,13 @@ end
 task.spawn(function()
     while true do
         task.wait(2)
-        for _, room in pairs(CurrentRooms:GetChildren()) do
-            local hasKey = room:FindFirstChild("KeyObtain", true)
-            if hasKey and not hasKey:FindFirstChild("ESPBillboard") then
-                warn(string.format("Found unhighlighted key in room %s, applying ESP", room.Name))
-                ApplyKeyESP(hasKey)
+        if Settings.KeyESP then
+            for _, room in pairs(CurrentRooms:GetChildren()) do
+                local hasKey = room:FindFirstChild("KeyObtain", true)
+                if hasKey and not hasKey:FindFirstChild("ESPBillboard") then
+                    warn(string.format("Found unhighlighted key in room %s, applying ESP", room.Name))
+                    ApplyKeyESP(hasKey)
+                end
             end
         end
     end
@@ -1128,9 +1130,13 @@ local function setupRushDetection()
         if RushModel and not RushModel:GetAttribute("ESPAdded") then
             local rushColor = Color3.fromRGB(255, 25, 25)
             task.spawn(function()
-                showEntityWarning("RUSH - HIDE IMMEDIATELY!", 5)
+                if Settings.EntityNotify then
+                    showEntityWarning("RUSH - HIDE IMMEDIATELY!", 5)
+                end
                 warn("⚠️ RUSH SPAWNED!")
                 RushModel:SetAttribute("ESPAdded", true)
+                
+                if not Settings.EntityESP then return end
                 
                 local highlight = Instance.new("Highlight")
                 highlight:SetAttribute("RushESP", true)
@@ -1183,7 +1189,7 @@ local function setupRushDetection()
     RunService.Heartbeat:Connect(checkForRush)
     
     Workspace.ChildAdded:Connect(function(child)
-        if child.Name == "RushMoving" then
+        if child.Name == "RushMoving" and Settings.EntityNotify then
             showEntityWarning("RUSH INCOMING - HIDE!", 5)
         end
     end)
@@ -1196,9 +1202,13 @@ local function setupAmbushDetection()
         if AmbushModel and not AmbushModel:GetAttribute("ESPAdded") then
             local ambushColor = Color3.fromRGB(255, 100, 0)
             task.spawn(function()
-                showEntityWarning("AMBUSH - HIDE AND STAY!", 5)
+                if Settings.EntityNotify then
+                    showEntityWarning("AMBUSH - HIDE AND STAY!", 5)
+                end
                 warn("⚠️ AMBUSH SPAWNED!")
                 AmbushModel:SetAttribute("ESPAdded", true)
+                
+                if not Settings.EntityESP then return end
                 
                 local highlight = Instance.new("Highlight")
                 highlight:SetAttribute("AmbushESP", true)
@@ -1251,7 +1261,7 @@ local function setupAmbushDetection()
     RunService.Heartbeat:Connect(checkForAmbush)
     
     Workspace.ChildAdded:Connect(function(child)
-        if child.Name == "AmbushMoving" then
+        if child.Name == "AmbushMoving" and Settings.EntityNotify then
             showEntityWarning("AMBUSH INCOMING!", 5)
         end
     end)
@@ -1266,6 +1276,8 @@ local function setupEyesDetection()
             task.spawn(function()
                 warn("👁️ EYES SPAWNED (Damage disabled)")
                 EyesModel:SetAttribute("ESPAdded", true)
+                
+                if not Settings.EntityESP then return end
                 
                 local highlight = Instance.new("Highlight")
                 highlight:SetAttribute("EyesESP", true)
@@ -1318,7 +1330,7 @@ local function setupEyesDetection()
     RunService.Heartbeat:Connect(checkForEyes)
     
     Workspace.ChildAdded:Connect(function(child)
-        if child.Name == "Eyes" then
+        if child.Name == "Eyes" and Settings.EntityNotify then
             showEntityWarning("EYES SPAWNED!", 5)
         end
     end)
@@ -1330,21 +1342,26 @@ local function setupScreechProtection()
     local Entities = ReplicatedStorage:WaitForChild("Entities")
     
     local function deleteScreech()
+        if not Settings.ScreechProtection then return end
         local Screech = Entities:FindFirstChild("Screech")
         if Screech then
             Screech:Destroy()
             warn("Screech deleted - You're safe!")
-            showEntityWarning("SCREECH BLOCKED", 3)
+            if Settings.EntityNotify then
+                showEntityWarning("SCREECH BLOCKED", 3)
+            end
         end
     end
     
     task.spawn(function() deleteScreech() end)
     
     Entities.ChildAdded:Connect(function(child)
-        if child.Name == "Screech" then
+        if child.Name == "Screech" and Settings.ScreechProtection then
             child:Destroy()
             warn("Screech blocked!")
-            showEntityWarning("SCREECH BLOCKED", 3)
+            if Settings.EntityNotify then
+                showEntityWarning("SCREECH BLOCKED", 3)
+            end
         end
     end)
 end
@@ -1413,15 +1430,13 @@ local function setupPredictiveWarnings()
     warn("Predictive warnings enabled - monitoring lights and RemoteEvents!")
 end
 
--- Initialize entity detection
-if Settings.EntityNotify then
-    setupRushDetection()
-    setupAmbushDetection()
-    setupEyesDetection()
-    setupScreechProtection()
-    setupPredictiveWarnings()
-    warn("Entity detection and ESP enabled!")
-end
+-- Initialize entity detection (always setup, but checks Settings dynamically)
+setupRushDetection()
+setupAmbushDetection()
+setupEyesDetection()
+setupScreechProtection()
+setupPredictiveWarnings()
+warn("Entity detection system initialized!")
 
 -- Fullbright
 local Lighting = game:GetService("Lighting")
