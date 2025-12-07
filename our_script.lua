@@ -178,7 +178,7 @@ local function CreateGUI()
     LogoImage.Size = UDim2.new(0, 120, 0, 32)
     LogoImage.Position = UDim2.new(1, -130, 0, 9)
     LogoImage.BackgroundTransparency = 1
-    LogoImage.Image = "rbxassetid://116559672267698"
+    LogoImage.Image = "rbxassetid://87962219786952"
     LogoImage.ScaleType = Enum.ScaleType.Fit
     LogoImage.Parent = Header
     
