@@ -4,18 +4,541 @@
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local CurrentRooms = Workspace:WaitForChild("CurrentRooms")
 
 -- Settings
 local Settings = {
+    -- ESP Settings
+    DoorESP = true,
+    DoorESPColor = Color3.fromRGB(168, 85, 247),
+    DoorShowDistance = true,
+    KeyESP = true,
+    KeyESPColor = Color3.fromRGB(255, 255, 0),
+    ItemESP = true,
+    CoinESP = true,
+    LeverESP = true,
+    
+    -- Entity Settings
+    EntityNotify = true,
+    EntityESP = true,
+    RushESP = true,
+    AmbushESP = true,
+    EyesESP = true,
+    ScreechProtection = true,
+    
+    -- Visual Settings
+    Fullbright = true,
+    FullbrightBrightness = 2,
+    FogEnabled = false,
+    
+    -- Gameplay Settings
+    Noclip = false,
+    Speed = 16,
     AutoCollectCoins = true,
     CoinDistance = 50,
-    DoorESP = true,
-    KeyESP = true,
-    ItemESP = true,
-    EntityNotify = true
+    InstantInteract = true
 }
+
+--[[ 
+    ╔═══════════════════════════════════════════════════════════╗
+    ║                    VESPER.LUA GUI                         ║
+    ║                  Modern Purple Theme                      ║
+    ╚═══════════════════════════════════════════════════════════╝
+]]
+
+local function CreateGUI()
+    local VesperGUI = Instance.new("ScreenGui")
+    VesperGUI.Name = "VesperGUI"
+    VesperGUI.ResetOnSpawn = false
+    VesperGUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    -- Main Frame
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Name = "MainFrame"
+    MainFrame.Size = UDim2.new(0, 550, 0, 400)
+    MainFrame.Position = UDim2.new(0.5, -275, 0.5, -200)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+    MainFrame.BorderSizePixel = 0
+    MainFrame.ClipsDescendants = true
+    MainFrame.Parent = VesperGUI
+    
+    local MainCorner = Instance.new("UICorner")
+    MainCorner.CornerRadius = UDim.new(0, 12)
+    MainCorner.Parent = MainFrame
+    
+    local MainStroke = Instance.new("UIStroke")
+    MainStroke.Color = Color3.fromRGB(168, 85, 247)
+    MainStroke.Thickness = 2
+    MainStroke.Transparency = 0.5
+    MainStroke.Parent = MainFrame
+    
+    -- Drag functionality
+    local dragging, dragInput, dragStart, startPos
+    
+    MainFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = MainFrame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    MainFrame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+    
+    -- Header
+    local Header = Instance.new("Frame")
+    Header.Name = "Header"
+    Header.Size = UDim2.new(1, 0, 0, 50)
+    Header.BackgroundColor3 = Color3.fromRGB(20, 15, 35)
+    Header.BorderSizePixel = 0
+    Header.Parent = MainFrame
+    
+    local HeaderCorner = Instance.new("UICorner")
+    HeaderCorner.CornerRadius = UDim.new(0, 12)
+    HeaderCorner.Parent = Header
+    
+    -- Logo (Option 4 style)
+    local LogoFrame = Instance.new("Frame")
+    LogoFrame.Size = UDim2.new(0, 140, 0, 35)
+    LogoFrame.Position = UDim2.new(0, 15, 0, 8)
+    LogoFrame.BackgroundColor3 = Color3.fromRGB(26, 21, 53)
+    LogoFrame.BorderSizePixel = 0
+    LogoFrame.Parent = Header
+    
+    local LogoCorner = Instance.new("UICorner")
+    LogoCorner.CornerRadius = UDim.new(0, 8)
+    LogoCorner.Parent = LogoFrame
+    
+    local LogoStroke = Instance.new("UIStroke")
+    LogoStroke.Color = Color3.fromRGB(168, 85, 247)
+    LogoStroke.Thickness = 1
+    LogoStroke.Transparency = 0.4
+    LogoStroke.Parent = LogoFrame
+    
+    local LogoText = Instance.new("TextLabel")
+    LogoText.Size = UDim2.new(1, -30, 1, 0)
+    LogoText.Position = UDim2.new(0, 25, 0, 0)
+    LogoText.BackgroundTransparency = 1
+    LogoText.Text = "vesper"
+    LogoText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    LogoText.TextSize = 16
+    LogoText.Font = Enum.Font.GothamBold
+    LogoText.TextXAlignment = Enum.TextXAlignment.Left
+    LogoText.Parent = LogoFrame
+    
+    local LogoLua = Instance.new("TextLabel")
+    LogoLua.Size = UDim2.new(0, 30, 1, 0)
+    LogoLua.Position = UDim2.new(0, 73, 0, 0)
+    LogoLua.BackgroundTransparency = 1
+    LogoLua.Text = ".lua"
+    LogoLua.TextColor3 = Color3.fromRGB(168, 85, 247)
+    LogoLua.TextSize = 16
+    LogoLua.Font = Enum.Font.GothamBold
+    LogoLua.TextXAlignment = Enum.TextXAlignment.Left
+    LogoLua.Parent = LogoFrame
+    
+    -- Star icon
+    local StarIcon = Instance.new("TextLabel")
+    StarIcon.Size = UDim2.new(0, 20, 0, 20)
+    StarIcon.Position = UDim2.new(0, 5, 0.5, -10)
+    StarIcon.BackgroundTransparency = 1
+    StarIcon.Text = "⭐"
+    StarIcon.TextColor3 = Color3.fromRGB(168, 85, 247)
+    StarIcon.TextSize = 18
+    StarIcon.Parent = LogoFrame
+    
+    -- Close Button
+    local CloseButton = Instance.new("TextButton")
+    CloseButton.Size = UDim2.new(0, 35, 0, 35)
+    CloseButton.Position = UDim2.new(1, -45, 0, 8)
+    CloseButton.BackgroundColor3 = Color3.fromRGB(30, 25, 45)
+    CloseButton.Text = "✕"
+    CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CloseButton.TextSize = 18
+    CloseButton.Font = Enum.Font.GothamBold
+    CloseButton.BorderSizePixel = 0
+    CloseButton.Parent = Header
+    
+    local CloseCorner = Instance.new("UICorner")
+    CloseCorner.CornerRadius = UDim.new(0, 8)
+    CloseCorner.Parent = CloseButton
+    
+    CloseButton.MouseButton1Click:Connect(function()
+        VesperGUI.Enabled = false
+    end)
+    
+    -- Tab System
+    local TabContainer = Instance.new("Frame")
+    TabContainer.Size = UDim2.new(0, 120, 1, -60)
+    TabContainer.Position = UDim2.new(0, 10, 0, 55)
+    TabContainer.BackgroundTransparency = 1
+    TabContainer.Parent = MainFrame
+    
+    local TabList = Instance.new("UIListLayout")
+    TabList.Padding = UDim.new(0, 8)
+    TabList.Parent = TabContainer
+    
+    -- Content Frame
+    local ContentFrame = Instance.new("ScrollingFrame")
+    ContentFrame.Size = UDim2.new(1, -150, 1, -65)
+    ContentFrame.Position = UDim2.new(0, 140, 0, 60)
+    ContentFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+    ContentFrame.BorderSizePixel = 0
+    ContentFrame.ScrollBarThickness = 4
+    ContentFrame.ScrollBarImageColor3 = Color3.fromRGB(168, 85, 247)
+    ContentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    ContentFrame.Parent = MainFrame
+    
+    local ContentCorner = Instance.new("UICorner")
+    ContentCorner.CornerRadius = UDim.new(0, 10)
+    ContentCorner.Parent = ContentFrame
+    
+    -- Helper Functions
+    local function CreateTab(name, icon, index)
+        local TabButton = Instance.new("TextButton")
+        TabButton.Size = UDim2.new(1, 0, 0, 35)
+        TabButton.BackgroundColor3 = Color3.fromRGB(25, 20, 40)
+        TabButton.Text = ""
+        TabButton.BorderSizePixel = 0
+        TabButton.Parent = TabContainer
+        
+        local TabCorner = Instance.new("UICorner")
+        TabCorner.CornerRadius = UDim.new(0, 8)
+        TabCorner.Parent = TabButton
+        
+        local TabIcon = Instance.new("TextLabel")
+        TabIcon.Size = UDim2.new(0, 20, 0, 20)
+        TabIcon.Position = UDim2.new(0, 8, 0.5, -10)
+        TabIcon.BackgroundTransparency = 1
+        TabIcon.Text = icon
+        TabIcon.TextColor3 = Color3.fromRGB(168, 85, 247)
+        TabIcon.TextSize = 16
+        TabIcon.Parent = TabButton
+        
+        local TabText = Instance.new("TextLabel")
+        TabText.Size = UDim2.new(1, -35, 1, 0)
+        TabText.Position = UDim2.new(0, 30, 0, 0)
+        TabText.BackgroundTransparency = 1
+        TabText.Text = name
+        TabText.TextColor3 = Color3.fromRGB(200, 200, 200)
+        TabText.TextSize = 13
+        TabText.Font = Enum.Font.GothamSemibold
+        TabText.TextXAlignment = Enum.TextXAlignment.Left
+        TabText.Parent = TabButton
+        
+        return TabButton
+    end
+    
+    local function CreateToggle(parent, text, setting, callback)
+        local ToggleFrame = Instance.new("Frame")
+        ToggleFrame.Size = UDim2.new(1, -20, 0, 35)
+        ToggleFrame.BackgroundColor3 = Color3.fromRGB(25, 20, 40)
+        ToggleFrame.BorderSizePixel = 0
+        ToggleFrame.Parent = parent
+        
+        local ToggleCorner = Instance.new("UICorner")
+        ToggleCorner.CornerRadius = UDim.new(0, 8)
+        ToggleCorner.Parent = ToggleFrame
+        
+        local Label = Instance.new("TextLabel")
+        Label.Size = UDim2.new(1, -60, 1, 0)
+        Label.Position = UDim2.new(0, 10, 0, 0)
+        Label.BackgroundTransparency = 1
+        Label.Text = text
+        Label.TextColor3 = Color3.fromRGB(220, 220, 220)
+        Label.TextSize = 13
+        Label.Font = Enum.Font.Gotham
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.Parent = ToggleFrame
+        
+        local ToggleButton = Instance.new("TextButton")
+        ToggleButton.Size = UDim2.new(0, 40, 0, 20)
+        ToggleButton.Position = UDim2.new(1, -50, 0.5, -10)
+        ToggleButton.BackgroundColor3 = Settings[setting] and Color3.fromRGB(168, 85, 247) or Color3.fromRGB(50, 50, 60)
+        ToggleButton.Text = ""
+        ToggleButton.BorderSizePixel = 0
+        ToggleButton.Parent = ToggleFrame
+        
+        local ToggleBtnCorner = Instance.new("UICorner")
+        ToggleBtnCorner.CornerRadius = UDim.new(1, 0)
+        ToggleBtnCorner.Parent = ToggleButton
+        
+        local ToggleIndicator = Instance.new("Frame")
+        ToggleIndicator.Size = UDim2.new(0, 16, 0, 16)
+        ToggleIndicator.Position = Settings[setting] and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+        ToggleIndicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        ToggleIndicator.BorderSizePixel = 0
+        ToggleIndicator.Parent = ToggleButton
+        
+        local IndicatorCorner = Instance.new("UICorner")
+        IndicatorCorner.CornerRadius = UDim.new(1, 0)
+        IndicatorCorner.Parent = ToggleIndicator
+        
+        ToggleButton.MouseButton1Click:Connect(function()
+            Settings[setting] = not Settings[setting]
+            local newColor = Settings[setting] and Color3.fromRGB(168, 85, 247) or Color3.fromRGB(50, 50, 60)
+            local newPos = Settings[setting] and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+            
+            TweenService:Create(ToggleButton, TweenInfo.new(0.2), {BackgroundColor3 = newColor}):Play()
+            TweenService:Create(ToggleIndicator, TweenInfo.new(0.2), {Position = newPos}):Play()
+            
+            if callback then callback(Settings[setting]) end
+        end)
+        
+        return ToggleFrame
+    end
+    
+    local function CreateSlider(parent, text, setting, min, max, callback)
+        local SliderFrame = Instance.new("Frame")
+        SliderFrame.Size = UDim2.new(1, -20, 0, 50)
+        SliderFrame.BackgroundColor3 = Color3.fromRGB(25, 20, 40)
+        SliderFrame.BorderSizePixel = 0
+        SliderFrame.Parent = parent
+        
+        local SliderCorner = Instance.new("UICorner")
+        SliderCorner.CornerRadius = UDim.new(0, 8)
+        SliderCorner.Parent = SliderFrame
+        
+        local Label = Instance.new("TextLabel")
+        Label.Size = UDim2.new(1, -70, 0, 20)
+        Label.Position = UDim2.new(0, 10, 0, 5)
+        Label.BackgroundTransparency = 1
+        Label.Text = text
+        Label.TextColor3 = Color3.fromRGB(220, 220, 220)
+        Label.TextSize = 13
+        Label.Font = Enum.Font.Gotham
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.Parent = SliderFrame
+        
+        local ValueLabel = Instance.new("TextLabel")
+        ValueLabel.Size = UDim2.new(0, 60, 0, 20)
+        ValueLabel.Position = UDim2.new(1, -65, 0, 5)
+        ValueLabel.BackgroundTransparency = 1
+        ValueLabel.Text = tostring(Settings[setting])
+        ValueLabel.TextColor3 = Color3.fromRGB(168, 85, 247)
+        ValueLabel.TextSize = 13
+        ValueLabel.Font = Enum.Font.GothamBold
+        ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
+        ValueLabel.Parent = SliderFrame
+        
+        local SliderBar = Instance.new("Frame")
+        SliderBar.Size = UDim2.new(1, -20, 0, 4)
+        SliderBar.Position = UDim2.new(0, 10, 1, -15)
+        SliderBar.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        SliderBar.BorderSizePixel = 0
+        SliderBar.Parent = SliderFrame
+        
+        local SliderBarCorner = Instance.new("UICorner")
+        SliderBarCorner.CornerRadius = UDim.new(1, 0)
+        SliderBarCorner.Parent = SliderBar
+        
+        local SliderFill = Instance.new("Frame")
+        SliderFill.Size = UDim2.new((Settings[setting] - min) / (max - min), 0, 1, 0)
+        SliderFill.BackgroundColor3 = Color3.fromRGB(168, 85, 247)
+        SliderFill.BorderSizePixel = 0
+        SliderFill.Parent = SliderBar
+        
+        local SliderFillCorner = Instance.new("UICorner")
+        SliderFillCorner.CornerRadius = UDim.new(1, 0)
+        SliderFillCorner.Parent = SliderFill
+        
+        local SliderButton = Instance.new("TextButton")
+        SliderButton.Size = UDim2.new(1, 0, 1, 0)
+        SliderButton.BackgroundTransparency = 1
+        SliderButton.Text = ""
+        SliderButton.Parent = SliderBar
+        
+        local dragging = false
+        
+        SliderButton.MouseButton1Down:Connect(function()
+            dragging = true
+        end)
+        
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = false
+            end
+        end)
+        
+        UserInputService.InputChanged:Connect(function(input)
+            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local pos = math.clamp((input.Position.X - SliderBar.AbsolutePosition.X) / SliderBar.AbsoluteSize.X, 0, 1)
+                local value = math.floor(min + (max - min) * pos)
+                Settings[setting] = value
+                ValueLabel.Text = tostring(value)
+                SliderFill.Size = UDim2.new(pos, 0, 1, 0)
+                if callback then callback(value) end
+            end
+        end)
+        
+        return SliderFrame
+    end
+    
+    -- Tab Pages
+    local Pages = {}
+    
+    local function CreatePage(name)
+        local Page = Instance.new("Frame")
+        Page.Name = name
+        Page.Size = UDim2.new(1, 0, 1, 0)
+        Page.BackgroundTransparency = 1
+        Page.Visible = false
+        Page.Parent = ContentFrame
+        
+        local PageList = Instance.new("UIListLayout")
+        PageList.Padding = UDim.new(0, 8)
+        PageList.Parent = Page
+        
+        Pages[name] = Page
+        return Page
+    end
+    
+    -- Create Tabs
+    local ESPTab = CreateTab("ESP", "👁️", 1)
+    local EntitiesTab = CreateTab("Entities", "👻", 2)
+    local VisualsTab = CreateTab("Visuals", "💡", 3)
+    local GameplayTab = CreateTab("Gameplay", "⚙️", 4)
+    
+    -- Create Pages
+    local ESPPage = CreatePage("ESP")
+    local EntitiesPage = CreatePage("Entities")
+    local VisualsPage = CreatePage("Visuals")
+    local GameplayPage = CreatePage("Gameplay")
+    
+    -- ESP Page Content
+    CreateToggle(ESPPage, "Door ESP", "DoorESP", function(val)
+        Settings.DoorESP = val
+    end)
+    CreateToggle(ESPPage, "Show Distance", "DoorShowDistance")
+    CreateToggle(ESPPage, "Key ESP", "KeyESP")
+    CreateToggle(ESPPage, "Coin ESP", "CoinESP")
+    CreateToggle(ESPPage, "Lever ESP", "LeverESP")
+    CreateToggle(ESPPage, "Item ESP", "ItemESP")
+    
+    -- Entities Page Content
+    CreateToggle(EntitiesPage, "Entity Notifications", "EntityNotify")
+    CreateToggle(EntitiesPage, "Entity ESP", "EntityESP")
+    CreateToggle(EntitiesPage, "Rush ESP", "RushESP")
+    CreateToggle(EntitiesPage, "Ambush ESP", "AmbushESP")
+    CreateToggle(EntitiesPage, "Eyes ESP", "EyesESP")
+    CreateToggle(EntitiesPage, "Screech Protection", "ScreechProtection")
+    
+    -- Visuals Page Content
+    CreateToggle(VisualsPage, "Fullbright", "Fullbright", function(val)
+        local Lighting = game:GetService("Lighting")
+        if val then
+            Lighting.Brightness = Settings.FullbrightBrightness
+            Lighting.Ambient = Color3.new(1, 1, 1)
+            Lighting.FogEnd = 100000
+            Lighting.GlobalShadows = false
+        else
+            Lighting.Brightness = 1
+            Lighting.Ambient = Color3.new(0, 0, 0)
+            Lighting.FogEnd = 500
+            Lighting.GlobalShadows = true
+        end
+    end)
+    CreateSlider(VisualsPage, "Brightness", "FullbrightBrightness", 1, 5, function(val)
+        if Settings.Fullbright then
+            game:GetService("Lighting").Brightness = val
+        end
+    end)
+    CreateToggle(VisualsPage, "Remove Fog", "FogEnabled", function(val)
+        game:GetService("Lighting").FogEnd = val and 100000 or 500
+    end)
+    
+    -- Gameplay Page Content
+    CreateToggle(GameplayPage, "Noclip", "Noclip")
+    CreateToggle(GameplayPage, "Auto Collect Coins", "AutoCollectCoins")
+    CreateToggle(GameplayPage, "Instant Interact", "InstantInteract")
+    CreateSlider(GameplayPage, "Walk Speed", "Speed", 16, 100)
+    CreateSlider(GameplayPage, "Coin Distance", "CoinDistance", 10, 100)
+    
+    -- Update canvas size
+    local function updateCanvasSize(page)
+        local content = page.UIListLayout.AbsoluteContentSize
+        ContentFrame.CanvasSize = UDim2.new(0, 0, 0, content.Y + 10)
+    end
+    
+    for _, page in pairs(Pages) do
+        page.UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            updateCanvasSize(page)
+        end)
+    end
+    
+    -- Tab Switching
+    local currentTab = ESPPage
+    local function switchTab(tab, page)
+        for _, t in pairs({ESPTab, EntitiesTab, VisualsTab, GameplayTab}) do
+            TweenService:Create(t, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(25, 20, 40)}):Play()
+        end
+        TweenService:Create(tab, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(168, 85, 247)}):Play()
+        
+        for _, p in pairs(Pages) do
+            p.Visible = false
+        end
+        page.Visible = true
+        currentTab = page
+        updateCanvasSize(page)
+    end
+    
+    ESPTab.MouseButton1Click:Connect(function() switchTab(ESPTab, ESPPage) end)
+    EntitiesTab.MouseButton1Click:Connect(function() switchTab(EntitiesTab, EntitiesPage) end)
+    VisualsTab.MouseButton1Click:Connect(function() switchTab(VisualsTab, VisualsPage) end)
+    GameplayTab.MouseButton1Click:Connect(function() switchTab(GameplayTab, GameplayPage) end)
+    
+    -- Default tab
+    switchTab(ESPTab, ESPPage)
+    
+    -- Toggle GUI with Right Ctrl
+    UserInputService.InputBegan:Connect(function(input, processed)
+        if not processed and input.KeyCode == Enum.KeyCode.RightControl then
+            VesperGUI.Enabled = not VesperGUI.Enabled
+        end
+    end)
+    
+    -- Animate GUI in
+    MainFrame.Size = UDim2.new(0, 0, 0, 0)
+    MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    VesperGUI.Parent = LocalPlayer.PlayerGui
+    
+    TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, 550, 0, 400),
+        Position = UDim2.new(0.5, -275, 0.5, -200)
+    }):Play()
+    
+    return VesperGUI
+end
+
+-- Initialize GUI
+local GUI = CreateGUI()
+warn("vesper.lua GUI loaded! Press Right Ctrl to toggle")
+
+-- Update old Settings references
+Settings.EntityNotify = Settings.EntityNotify
+Settings.DoorESP = Settings.DoorESP
+Settings.KeyESP = Settings.KeyESP
+Settings.ItemESP = Settings.ItemESP
 
 -- Track opened doors
 local openedDoors = {}
