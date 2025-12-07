@@ -66,20 +66,16 @@ local function ApplyDoorESP(room)
     local door = room:WaitForChild("Door", 2)
     if not door then return end
     
-    -- Check if locked
+    -- Check if locked (Lock MeshPart exists as direct child)
     local lock = door:FindFirstChild("Lock")
-    local isLocked = lock ~= nil
+    local isLocked = (lock ~= nil and lock:IsA("MeshPart"))
     
     -- Colors
     local fillColor = isLocked and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50)
     local outlineColor = isLocked and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(0, 200, 0)
     
-    -- Apply highlight to ONLY the actual door part, not the frame
-    for _, part in pairs(door:GetDescendants()) do
-        if part:IsA("BasePart") and part.Name == "Door" then
-            CreateHighlight(part, fillColor, outlineColor, 0.4, 0)
-        end
-    end
+    -- Apply highlight to the entire Door model
+    CreateHighlight(door, fillColor, outlineColor, 0.4, 0)
     
     -- Create billboard
     local text = string.format("DOOR %d\n%s", roomNumber, isLocked and "🔒 LOCKED" or "✓ OPEN")
