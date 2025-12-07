@@ -80,8 +80,9 @@ local function ApplyDoorESP(room)
     -- Apply highlight to the entire Door model
     CreateHighlight(door, fillColor, outlineColor, 0.4, 0)
     
-    -- Create billboard
-    local text = string.format("DOOR %d\n%s", roomNumber, isLocked and "🔒 LOCKED" or "✓ OPEN")
+    -- Create billboard (add +1 to match in-game door numbers)
+    local displayNumber = roomNumber + 1
+    local text = string.format("DOOR %d\n%s", displayNumber, isLocked and "🔒 LOCKED" or "✓ OPEN")
     local textColor = isLocked and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(100, 255, 100)
     CreateBillboard(door, text, textColor, 5)
     
@@ -93,7 +94,7 @@ local function ApplyDoorESP(room)
         end
     end
     
-    warn(string.format("Door ESP applied to room %d (%s)", roomNumber, isLocked and "LOCKED" or "OPEN"))
+    warn(string.format("Door ESP applied to room %d (displayed as DOOR %d) (%s)", roomNumber, displayNumber, isLocked and "LOCKED" or "OPEN"))
 end
 
 -- Key ESP Function (Fixed path)
