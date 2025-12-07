@@ -66,19 +66,21 @@ local function ApplyDoorESP(room)
     local door = room:WaitForChild("Door", 2)
     if not door then return end
     
-    -- Check if locked (Lock MeshPart exists)
-    local lock = door:FindFirstChild("Lock")
+    -- Check if locked by looking for ProximityPrompt that requires a key
     local isLocked = false
+    local lockPrompt = nil
     
-    -- Debug: Check what we found
-    if lock then
-        warn(string.format("Room %d - Lock found: %s, ClassName: %s, Transparency: %s", roomNumber, tostring(lock), lock.ClassName, tostring(lock.Transparency)))
-        if lock:IsA("MeshPart") then
-            isLocked = true
+    for _, descendant in pairs(door:GetDescendants()) do
+        if descendant:IsA("ProximityPrompt") then
+            if descendant.ObjectText and descendant.ObjectText:find("Key") then
+                isLocked = true
+                lockPrompt = descendant
+                break
+            end
         end
-    else
-        warn(string.format("Room %d - No Lock found (unlocked)", roomNumber))
     end
+    
+    warn(string.format("Room %d - Locked: %s", roomNumber, tostring(isLocked)))
     
     -- Colors
     local fillColor = isLocked and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50)
