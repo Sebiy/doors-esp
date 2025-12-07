@@ -12,34 +12,34 @@ local CurrentRooms = Workspace:WaitForChild("CurrentRooms")
 -- Settings
 local Settings = {
     -- ESP Settings
-    DoorESP = true,
+    DoorESP = false,
     DoorESPColor = Color3.fromRGB(168, 85, 247),
-    DoorShowDistance = true,
-    KeyESP = true,
+    DoorShowDistance = false,
+    KeyESP = false,
     KeyESPColor = Color3.fromRGB(255, 255, 0),
-    ItemESP = true,
-    CoinESP = true,
-    LeverESP = true,
+    ItemESP = false,
+    CoinESP = false,
+    LeverESP = false,
     
     -- Entity Settings
-    EntityNotify = true,
-    EntityESP = true,
-    RushESP = true,
-    AmbushESP = true,
-    EyesESP = true,
-    ScreechProtection = true,
+    EntityNotify = false,
+    EntityESP = false,
+    RushESP = false,
+    AmbushESP = false,
+    EyesESP = false,
+    ScreechProtection = false,
     
     -- Visual Settings
-    Fullbright = true,
+    Fullbright = false,
     FullbrightBrightness = 2,
     FogEnabled = false,
     
     -- Gameplay Settings
     Noclip = false,
     Speed = 16,
-    AutoCollectCoins = true,
+    AutoCollectCoins = false,
     CoinDistance = 50,
-    InstantInteract = true
+    InstantInteract = false
 }
 
 --[[ 
@@ -168,23 +168,91 @@ local function CreateGUI()
     StarIcon.Parent = LogoFrame
     
     -- Close Button
+    -- vesper.lua Logo (Option 4 Style)
+    local LogoFrame = Instance.new("Frame")
+    LogoFrame.Size = UDim2.new(0, 110, 0, 28)
+    LogoFrame.Position = UDim2.new(1, -120, 0, 11)
+    LogoFrame.BackgroundColor3 = Color3.fromRGB(20, 15, 35)
+    LogoFrame.BorderSizePixel = 0
+    LogoFrame.Parent = Header
+    
+    local LogoCorner = Instance.new("UICorner")
+    LogoCorner.CornerRadius = UDim.new(0, 6)
+    LogoCorner.Parent = LogoFrame
+    
+    local LogoBorder = Instance.new("UIStroke")
+    LogoBorder.Color = Color3.fromRGB(168, 85, 247)
+    LogoBorder.Thickness = 1
+    LogoBorder.Parent = LogoFrame
+    
+    local LogoText = Instance.new("TextLabel")
+    LogoText.Size = UDim2.new(1, -25, 1, 0)
+    LogoText.Position = UDim2.new(0, 25, 0, 0)
+    LogoText.BackgroundTransparency = 1
+    LogoText.Text = "vesper.lua"
+    LogoText.TextColor3 = Color3.fromRGB(168, 85, 247)
+    LogoText.TextSize = 12
+    LogoText.Font = Enum.Font.GothamBold
+    LogoText.TextXAlignment = Enum.TextXAlignment.Center
+    LogoText.Parent = LogoFrame
+    
+    local LogoIcon = Instance.new("TextLabel")
+    LogoIcon.Size = UDim2.new(0, 20, 1, 0)
+    LogoIcon.Position = UDim2.new(0, 5, 0, 0)
+    LogoIcon.BackgroundTransparency = 1
+    LogoIcon.Text = "⭐"
+    LogoIcon.TextColor3 = Color3.fromRGB(168, 85, 247)
+    LogoIcon.TextSize = 14
+    LogoIcon.Font = Enum.Font.GothamBold
+    LogoIcon.Parent = LogoFrame
+    
+    -- Close Button (Improved Design)
     local CloseButton = Instance.new("TextButton")
-    CloseButton.Size = UDim2.new(0, 35, 0, 35)
-    CloseButton.Position = UDim2.new(1, -45, 0, 8)
-    CloseButton.BackgroundColor3 = Color3.fromRGB(30, 25, 45)
+    CloseButton.Size = UDim2.new(0, 30, 0, 30)
+    CloseButton.Position = UDim2.new(1, -37, 0, 10)
+    CloseButton.BackgroundColor3 = Color3.fromRGB(40, 30, 55)
     CloseButton.Text = "✕"
-    CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    CloseButton.TextSize = 18
+    CloseButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+    CloseButton.TextSize = 16
     CloseButton.Font = Enum.Font.GothamBold
     CloseButton.BorderSizePixel = 0
-    CloseButton.Parent = Header
+    CloseButton.Parent = MainFrame
+    CloseButton.ZIndex = 10
     
     local CloseCorner = Instance.new("UICorner")
     CloseCorner.CornerRadius = UDim.new(0, 8)
     CloseCorner.Parent = CloseButton
     
+    local CloseBorder = Instance.new("UIStroke")
+    CloseBorder.Color = Color3.fromRGB(80, 60, 100)
+    CloseBorder.Thickness = 1
+    CloseBorder.Parent = CloseButton
+    
+    -- Hover effects for close button
+    CloseButton.MouseEnter:Connect(function()
+        TweenService:Create(CloseButton, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(220, 60, 80)
+        }):Play()
+        TweenService:Create(CloseBorder, TweenInfo.new(0.2), {
+            Color = Color3.fromRGB(255, 100, 120)
+        }):Play()
+        CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end)
+    
+    CloseButton.MouseLeave:Connect(function()
+        TweenService:Create(CloseButton, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(40, 30, 55)
+        }):Play()
+        TweenService:Create(CloseBorder, TweenInfo.new(0.2), {
+            Color = Color3.fromRGB(80, 60, 100)
+        }):Play()
+        CloseButton.TextColor3 = Color3.fromRGB(200, 200, 200)
+    end)
+    
     CloseButton.MouseButton1Click:Connect(function()
         VesperGUI.Enabled = false
+        -- Re-lock cursor like the game does
+        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
     end)
     
     -- Tab System
@@ -514,6 +582,14 @@ local function CreateGUI()
     UserInputService.InputBegan:Connect(function(input, processed)
         if not processed and input.KeyCode == Enum.KeyCode.RightControl then
             VesperGUI.Enabled = not VesperGUI.Enabled
+            
+            -- Unlock/lock cursor based on GUI state
+            if VesperGUI.Enabled then
+                UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+                UserInputService.MouseIconEnabled = true
+            else
+                UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+            end
         end
     end)
     
