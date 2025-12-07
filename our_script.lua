@@ -624,12 +624,77 @@ local function setupScreechProtection()
     end)
 end
 
+-- Predictive entity warning system
+local function setupPredictiveWarnings()
+    -- Monitor for flickering lights (Rush/Ambush warning)
+    local function monitorLights()
+        for _, room in pairs(CurrentRooms:GetChildren()) do
+            local assets = room:FindFirstChild("Assets")
+            if assets then
+                -- Monitor light fixtures for flicker
+                for _, descendant in pairs(assets:GetDescendants()) do
+                    if descendant:IsA("Light") or descendant:IsA("PointLight") or descendant:IsA("SpotLight") then
+                        descendant:GetPropertyChangedSignal("Enabled"):Connect(function()
+                            if not descendant.Enabled then
+                                showEntityWarning("⚡ LIGHTS FLICKERING - ENTITY APPROACHING!", 4)
+                                warn("⚡ Light flicker detected - Entity incoming!")
+                            end
+                        end)
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Monitor new rooms for lights
+    CurrentRooms.ChildAdded:Connect(function(room)
+        task.wait(0.5)
+        local assets = room:FindFirstChild("Assets")
+        if assets then
+            for _, descendant in pairs(assets:GetDescendants()) do
+                if descendant:IsA("Light") or descendant:IsA("PointLight") or descendant:IsA("SpotLight") then
+                    descendant:GetPropertyChangedSignal("Enabled"):Connect(function()
+                        if not descendant.Enabled then
+                            showEntityWarning("⚡ LIGHTS FLICKERING - ENTITY APPROACHING!", 4)
+                            warn("⚡ Light flicker detected - Entity incoming!")
+                        end
+                    end)
+                end
+            end
+        end
+    end)
+    
+    -- Monitor for RemoteEvents that might signal entity spawns
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    if ReplicatedStorage:FindFirstChild("RemotesFolder") then
+        for _, remote in pairs(ReplicatedStorage.RemotesFolder:GetChildren()) do
+            if remote:IsA("RemoteEvent") then
+                remote.OnClientEvent:Connect(function(...)
+                    local args = {...}
+                    -- Log RemoteEvent calls for debugging
+                    pcall(function()
+                        if typeof(args[1]) == "string" then
+                            if args[1]:lower():find("rush") or args[1]:lower():find("ambush") then
+                                warn("RemoteEvent detected:", remote.Name, unpack(args))
+                            end
+                        end
+                    end)
+                end)
+            end
+        end
+    end
+    
+    monitorLights()
+    warn("Predictive warnings enabled - monitoring lights and RemoteEvents!")
+end
+
 -- Initialize entity detection
 if Settings.EntityNotify then
     setupRushDetection()
     setupAmbushDetection()
     setupEyesDetection()
     setupScreechProtection()
+    setupPredictiveWarnings()
     warn("Entity detection and ESP enabled!")
 end
 
