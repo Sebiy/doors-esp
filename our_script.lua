@@ -262,15 +262,15 @@ CurrentRooms.ChildAdded:Connect(function(room)
     end)
 end)
 
--- Apply ESP to existing rooms
-for _, room in pairs(CurrentRooms:GetChildren()) do
-    ApplyDoorESP(room)
-    
+-- Function to scan room for items
+local function ScanRoomForItems(room)
+    local foundKey = false
     -- Check existing items (recursively search for KeyObtain)
     for _, descendant in pairs(room:GetDescendants()) do
         if descendant.Name == "KeyObtain" then
+            foundKey = true
             ApplyKeyESP(descendant)
-            warn(string.format("Found existing key in room %s", room.Name))
+            warn(string.format("Found existing key in room %s at path: %s", room.Name, descendant:GetFullName()))
         end
         if descendant.Name == "LeverForGate" then
             ApplyItemESP(descendant, "⚡ LEVER", Color3.fromRGB(0, 255, 0))
@@ -280,7 +280,30 @@ for _, room in pairs(CurrentRooms:GetChildren()) do
             AutoCollectCoin(descendant)
         end
     end
+    if not foundKey then
+        warn(string.format("No key found in room %s", room.Name))
+    end
 end
+
+-- Apply ESP to existing rooms
+for _, room in pairs(CurrentRooms:GetChildren()) do
+    ApplyDoorESP(room)
+    ScanRoomForItems(room)
+end
+
+-- Continuously scan for keys every 2 seconds
+task.spawn(function()
+    while true do
+        task.wait(2)
+        for _, room in pairs(CurrentRooms:GetChildren()) do
+            local hasKey = room:FindFirstChild("KeyObtain", true)
+            if hasKey and not hasKey:FindFirstChild("ESPBillboard") then
+                warn(string.format("Found unhighlighted key in room %s, applying ESP", room.Name))
+                ApplyKeyESP(hasKey)
+            end
+        end
+    end
+end)
 
 -- Entity Notifications
 if Settings.EntityNotify then
