@@ -17,6 +17,9 @@ local Settings = {
     EntityNotify = true
 }
 
+-- Track opened doors
+local openedDoors = {}
+
 -- Helper function to create highlights
 local function CreateHighlight(part, fillColor, outlineColor, fillTrans, outlineTrans)
     if part:FindFirstChildOfClass("Highlight") then
@@ -66,18 +69,23 @@ local function ApplyDoorESP(room)
     local door = room:WaitForChild("Door", 2)
     if not door then return end
     
+    -- Skip if door is already opened
+    if openedDoors[door] then return end
+    
     -- Check if locked by looking for KeyObtain in the room
     local key = room:FindFirstChild("KeyObtain", true)
     local isLocked = (key ~= nil)
-    
-    warn(string.format("Room %d - Locked: %s (Key present: %s)", roomNumber, tostring(isLocked), tostring(key ~= nil)))
     
     -- Colors
     local fillColor = isLocked and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50)
     local outlineColor = isLocked and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(0, 200, 0)
     
-    -- Apply highlight to the entire Door model
-    CreateHighlight(door, fillColor, outlineColor, 0.4, 0)
+    -- Apply highlight only to visible door parts (not collision/frame parts)
+    for _, part in pairs(door:GetDescendants()) do
+        if part:IsA("BasePart") and part.Transparency < 1 and part.Name == "Door" then
+            CreateHighlight(part, fillColor, outlineColor, 0.4, 0)
+        end
+    end
     
     -- Create billboard (add +1 to match in-game door numbers)
     local displayNumber = roomNumber + 1
@@ -85,11 +93,23 @@ local function ApplyDoorESP(room)
     local textColor = isLocked and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(100, 255, 100)
     CreateBillboard(door, text, textColor, 5)
     
-    -- Instant unlock proximity prompts
+    -- Instant unlock proximity prompts and monitor for door opening
     for _, descendant in pairs(door:GetDescendants()) do
         if descendant:IsA("ProximityPrompt") then
             descendant.HoldDuration = 0
             descendant.MaxActivationDistance = 15
+            
+            -- Monitor door opening
+            descendant.Triggered:Connect(function()
+                openedDoors[door] = true
+                -- Clear ESP
+                for _, child in pairs(door:GetDescendants()) do
+                    if child:IsA("Highlight") or child.Name == "ESPBillboard" then
+                        child:Destroy()
+                    end
+                end
+                warn(string.format("Door %d opened - ESP cleared", displayNumber))
+            end)
         end
     end
     
@@ -205,10 +225,10 @@ CurrentRooms.ChildAdded:Connect(function(room)
     
     -- Monitor for items in this room
     room.DescendantAdded:Connect(function(descendant)
-        -- Key detection with correct path
-        if descendant.Name == "KeyObtain" or (descendant.Parent and descendant.Parent.Name == "KeyObtain") then
-            local keyModel = descendant.Name == "KeyObtain" and descendant or descendant.Parent
-            ApplyKeyESP(keyModel)
+        -- Key detection (recursively check for KeyObtain)
+        if descendant.Name == "KeyObtain" and descendant:IsA("Model") then
+            ApplyKeyESP(descendant)
+            warn(string.format("Key spawned in room %s", room.Name))
         end
         
         -- Lever detection
@@ -228,10 +248,11 @@ end)
 for _, room in pairs(CurrentRooms:GetChildren()) do
     ApplyDoorESP(room)
     
-    -- Check existing items
+    -- Check existing items (recursively search for KeyObtain)
     for _, descendant in pairs(room:GetDescendants()) do
-        if descendant.Name == "KeyObtain" then
+        if descendant.Name == "KeyObtain" and descendant:IsA("Model") then
             ApplyKeyESP(descendant)
+            warn(string.format("Found existing key in room %s", room.Name))
         end
         if descendant.Name == "LeverForGate" then
             ApplyItemESP(descendant, "⚡ LEVER", Color3.fromRGB(0, 255, 0))
