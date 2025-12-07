@@ -347,6 +347,14 @@ ESPItemsGroup:AddToggle("DoorESP", {
     Default = Settings.DoorESP,
     Callback = function(Value)
         Settings.DoorESP = Value
+        -- Apply ESP to all existing rooms when toggled ON
+        if Value then
+            for _, room in pairs(CurrentRooms:GetChildren()) do
+                task.spawn(function()
+                    ApplyDoorESP(room)
+                end)
+            end
+        end
     end
 }):AddColorPicker("DoorESPColor", {
     Default = Settings.DoorESPColor,
@@ -417,6 +425,18 @@ ESPItemsGroup:AddToggle("KeyESP", {
     Default = Settings.KeyESP,
     Callback = function(Value)
         Settings.KeyESP = Value
+        -- Apply ESP to all existing keys when toggled ON
+        if Value then
+            for _, room in pairs(CurrentRooms:GetChildren()) do
+                task.spawn(function()
+                    for _, descendant in pairs(room:GetDescendants()) do
+                        if descendant.Name == "KeyObtain" and not descendant:FindFirstChild("ESPBillboard") then
+                            ApplyKeyESP(descendant)
+                        end
+                    end
+                end)
+            end
+        end
     end
 }):AddColorPicker("KeyESPColor", {
     Default = Settings.KeyESPColor,
@@ -805,10 +825,12 @@ local function ApplyDoorESP(room)
     local fillColor = isLocked and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50)
     local outlineColor = isLocked and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(0, 200, 0)
     
-    -- Apply highlight only to the main visible door part
+    -- Apply highlight to the door MeshPart (Door.Door)
     local doorPart = door:FindFirstChild("Door")
-    if doorPart and doorPart:IsA("BasePart") and doorPart.Transparency < 1 then
-        CreateHighlight(doorPart, fillColor, outlineColor, 0.4, 0)
+    if doorPart then
+        if doorPart:IsA("MeshPart") or (doorPart:IsA("BasePart") and doorPart.Transparency < 1) then
+            CreateHighlight(doorPart, Settings.DoorESPColor or Color3.fromRGB(255, 255, 0), outlineColor, 0.4, 0)
+        end
     end
     
     -- Create billboard (add +1 to match in-game door numbers)
