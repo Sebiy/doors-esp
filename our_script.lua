@@ -55,11 +55,11 @@ local function CreateGUI()
     VesperGUI.ResetOnSpawn = false
     VesperGUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     
-    -- Main Frame
+    -- Main Frame (Bigger Size)
     local MainFrame = Instance.new("Frame")
     MainFrame.Name = "MainFrame"
-    MainFrame.Size = UDim2.new(0, 550, 0, 400)
-    MainFrame.Position = UDim2.new(0.5, -275, 0.5, -200)
+    MainFrame.Size = UDim2.new(0, 650, 0, 480)
+    MainFrame.Position = UDim2.new(0.5, -325, 0.5, -240)
     MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
     MainFrame.BorderSizePixel = 0
     MainFrame.ClipsDescendants = true
@@ -168,13 +168,28 @@ local function CreateGUI()
     StarIcon.Parent = LogoFrame
     
     -- Close Button
-    -- vesper.lua Logo (Option 4 Style)
+    -- vesper.lua Logo (Image Version)
+    -- TO USE YOUR SCREENSHOT: 
+    -- 1. Go to roblox.com and create/upload the image as a Decal
+    -- 2. Get the asset ID (looks like: rbxassetid://123456789)
+    -- 3. Replace "YOUR_ASSET_ID_HERE" below with your ID
+    
+    local LogoImage = Instance.new("ImageLabel")
+    LogoImage.Size = UDim2.new(0, 120, 0, 32)
+    LogoImage.Position = UDim2.new(1, -130, 0, 9)
+    LogoImage.BackgroundTransparency = 1
+    LogoImage.Image = "rbxassetid://YOUR_ASSET_ID_HERE"  -- Replace with your uploaded image ID
+    LogoImage.ScaleType = Enum.ScaleType.Fit
+    LogoImage.Parent = Header
+    
+    -- Fallback text logo if image not loaded
     local LogoFrame = Instance.new("Frame")
     LogoFrame.Size = UDim2.new(0, 110, 0, 28)
     LogoFrame.Position = UDim2.new(1, -120, 0, 11)
     LogoFrame.BackgroundColor3 = Color3.fromRGB(20, 15, 35)
     LogoFrame.BorderSizePixel = 0
     LogoFrame.Parent = Header
+    LogoFrame.Visible = false  -- Hidden when using image
     
     local LogoCorner = Instance.new("UICorner")
     LogoCorner.CornerRadius = UDim.new(0, 6)
@@ -205,6 +220,14 @@ local function CreateGUI()
     LogoIcon.TextSize = 14
     LogoIcon.Font = Enum.Font.GothamBold
     LogoIcon.Parent = LogoFrame
+    
+    -- Show text logo if image fails to load
+    LogoImage:GetPropertyChangedSignal("ImageTransparency"):Connect(function()
+        if LogoImage.ImageTransparency >= 1 then
+            LogoFrame.Visible = true
+            LogoImage.Visible = false
+        end
+    end)
     
     -- Close Button (Improved Design)
     local CloseButton = Instance.new("TextButton")
@@ -598,9 +621,13 @@ local function CreateGUI()
     MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
     VesperGUI.Parent = LocalPlayer.PlayerGui
     
+    -- Unlock cursor immediately when GUI loads
+    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+    UserInputService.MouseIconEnabled = true
+    
     TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = UDim2.new(0, 550, 0, 400),
-        Position = UDim2.new(0.5, -275, 0.5, -200)
+        Size = UDim2.new(0, 650, 0, 480),
+        Position = UDim2.new(0.5, -325, 0.5, -240)
     }):Play()
     
     return VesperGUI
