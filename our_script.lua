@@ -80,11 +80,22 @@ local function ApplyDoorESP(room)
     local fillColor = isLocked and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50)
     local outlineColor = isLocked and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(0, 200, 0)
     
-    -- Apply highlight only to visible door parts (not collision/frame parts)
-    for _, part in pairs(door:GetDescendants()) do
-        if part:IsA("BasePart") and part.Transparency < 1 and part.Name == "Door" then
-            CreateHighlight(part, fillColor, outlineColor, 0.4, 0)
+    -- Apply highlight to door's main part only
+    local doorPart = nil
+    if door:IsA("Model") and door.PrimaryPart then
+        doorPart = door.PrimaryPart
+    else
+        -- Find the main "Door" part if no PrimaryPart
+        for _, part in pairs(door:GetChildren()) do
+            if part:IsA("BasePart") and part.Name == "Door" and part.Transparency < 1 then
+                doorPart = part
+                break
+            end
         end
+    end
+    
+    if doorPart then
+        CreateHighlight(doorPart, fillColor, outlineColor, 0.4, 0)
     end
     
     -- Create billboard (add +1 to match in-game door numbers)
@@ -99,7 +110,7 @@ local function ApplyDoorESP(room)
             descendant.HoldDuration = 0
             descendant.MaxActivationDistance = 15
             
-            -- Monitor door opening
+            -- Monitor door opening via Triggered event
             descendant.Triggered:Connect(function()
                 openedDoors[door] = true
                 -- Clear ESP
@@ -111,6 +122,22 @@ local function ApplyDoorESP(room)
                 warn(string.format("Door %d opened - ESP cleared", displayNumber))
             end)
         end
+    end
+    
+    -- Also monitor door's Opened attribute for unlocked doors
+    if door:GetAttribute("Opened") ~= nil then
+        door:GetAttributeChangedSignal("Opened"):Connect(function()
+            if door:GetAttribute("Opened") == true then
+                openedDoors[door] = true
+                -- Clear ESP
+                for _, child in pairs(door:GetDescendants()) do
+                    if child:IsA("Highlight") or child.Name == "ESPBillboard" then
+                        child:Destroy()
+                    end
+                end
+                warn(string.format("Door %d opened (attribute) - ESP cleared", displayNumber))
+            end
+        end)
     end
     
     warn(string.format("Door ESP applied to room %d (displayed as DOOR %d) (%s)", roomNumber, displayNumber, isLocked and "LOCKED" or "OPEN"))
