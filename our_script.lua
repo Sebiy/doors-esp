@@ -80,11 +80,10 @@ local function ApplyDoorESP(room)
     local fillColor = isLocked and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50)
     local outlineColor = isLocked and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(0, 200, 0)
     
-    -- Apply highlight only to visible door parts (not collision/hitboxes)
-    for _, part in pairs(door:GetDescendants()) do
-        if part:IsA("BasePart") and part.Transparency < 1 and not part.Name:find("Collision") and not part.Name:find("Hitbox") then
-            CreateHighlight(part, fillColor, outlineColor, 0.4, 0)
-        end
+    -- Apply highlight only to the main visible door part
+    local doorPart = door:FindFirstChild("Door")
+    if doorPart and doorPart:IsA("BasePart") and doorPart.Transparency < 1 then
+        CreateHighlight(doorPart, fillColor, outlineColor, 0.4, 0)
     end
     
     -- Create billboard (add +1 to match in-game door numbers)
@@ -320,36 +319,43 @@ local function createNotificationUI()
     local WarningFrame = Instance.new("Frame")
     WarningFrame.Name = "WarningFrame"
     WarningFrame.AnchorPoint = Vector2.new(0.5, 0)
-    WarningFrame.BackgroundColor3 = Color3.fromRGB(20, 0, 0)
-    WarningFrame.BackgroundTransparency = 0.1
+    WarningFrame.BackgroundColor3 = Color3.fromRGB(15, 0, 0)
+    WarningFrame.BackgroundTransparency = 0
     WarningFrame.BorderSizePixel = 0
     WarningFrame.Position = UDim2.new(0.5, 0, 0.1, 0)
-    WarningFrame.Size = UDim2.new(0.4, 0, 0.1, 0)
+    WarningFrame.Size = UDim2.new(0, 400, 0, 80)
     WarningFrame.Visible = false
     WarningFrame.Parent = NotificationGui
 
     local UICorner = Instance.new("UICorner")
-    UICorner.CornerRadius = UDim.new(0, 12)
+    UICorner.CornerRadius = UDim.new(0, 15)
     UICorner.Parent = WarningFrame
+    
+    local UIStroke = Instance.new("UIStroke")
+    UIStroke.Color = Color3.fromRGB(255, 50, 50)
+    UIStroke.Thickness = 3
+    UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    UIStroke.Parent = WarningFrame
 
     local WarningText = Instance.new("TextLabel")
     WarningText.Name = "WarningText"
     WarningText.BackgroundTransparency = 1
-    WarningText.Size = UDim2.new(1, 0, 0.5, 0)
+    WarningText.Position = UDim2.new(0, 0, 0, 5)
+    WarningText.Size = UDim2.new(1, 0, 0, 30)
     WarningText.Font = Enum.Font.GothamBold
     WarningText.TextColor3 = Color3.fromRGB(255, 80, 80)
-    WarningText.TextSize = 24
+    WarningText.TextSize = 20
     WarningText.Text = "⚠️ ENTITY DETECTED ⚠️"
     WarningText.Parent = WarningFrame
 
     local EntityName = Instance.new("TextLabel")
     EntityName.Name = "EntityName"
     EntityName.BackgroundTransparency = 1
-    EntityName.Position = UDim2.new(0, 0, 0.5, 0)
-    EntityName.Size = UDim2.new(1, 0, 0.5, 0)
-    EntityName.Font = Enum.Font.GothamSemibold
+    EntityName.Position = UDim2.new(0, 0, 0, 35)
+    EntityName.Size = UDim2.new(1, 0, 0, 40)
+    EntityName.Font = Enum.Font.GothamBold
     EntityName.TextColor3 = Color3.fromRGB(255, 255, 255)
-    EntityName.TextSize = 20
+    EntityName.TextSize = 24
     EntityName.Text = ""
     EntityName.Parent = WarningFrame
 
@@ -400,49 +406,51 @@ local function setupRushDetection()
                 showEntityWarning("RUSH - HIDE IMMEDIATELY!", 5)
                 warn("⚠️ RUSH SPAWNED!")
                 RushModel:SetAttribute("ESPAdded", true)
+                
+                local highlight = Instance.new("Highlight")
+                highlight:SetAttribute("RushESP", true)
+                highlight.Adornee = RushModel
+                highlight.FillColor = rushColor
+                highlight.OutlineColor = Color3.new(1, 0, 0)
+                highlight.FillTransparency = 0
+                highlight.OutlineTransparency = 0
+                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                highlight.Parent = RushModel
+                
+                local billboard = Instance.new("BillboardGui")
+                billboard:SetAttribute("RushESP", true)
+                billboard.Adornee = RushModel
+                billboard.Size = UDim2.new(0, 200, 0, 50)
+                billboard.StudsOffset = Vector3.new(0, 5, 0)
+                billboard.AlwaysOnTop = true
+                billboard.Parent = RushModel
+                
+                local textLabel = Instance.new("TextLabel")
+                textLabel.Size = UDim2.new(1, 0, 1, 0)
+                textLabel.BackgroundTransparency = 1
+                textLabel.TextColor3 = rushColor
+                textLabel.TextStrokeTransparency = 0.2
+                textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+                textLabel.TextScaled = true
+                textLabel.Font = Enum.Font.GothamBold
+                textLabel.Parent = billboard
+                
                 while RushModel and RushModel.Parent do
                     pcall(function()
                         local playerPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position
                         if playerPos then
                             local rushPos = RushModel:GetPivot().Position
                             local distance = (playerPos - rushPos).Magnitude
-                            local rushText = "⚠️ RUSH - " .. math.floor(distance) .. " studs ⚠️"
-                            for _, item in pairs(ESPFolder:GetChildren()) do
-                                if item:GetAttribute("RushESP") then item:Destroy() end
-                            end
-                            
-                            local highlight = Instance.new("Highlight")
-                            highlight:SetAttribute("RushESP", true)
-                            highlight.Adornee = RushModel
-                            highlight.FillColor = rushColor
-                            highlight.OutlineColor = Color3.new(1, 0, 0)
-                            highlight.FillTransparency = 0
-                            highlight.OutlineTransparency = 0
-                            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                            highlight.Parent = ESPFolder
-                            
-                            local billboard = Instance.new("BillboardGui")
-                            billboard:SetAttribute("RushESP", true)
-                            billboard.Adornee = RushModel
-                            billboard.Size = UDim2.new(0, 200, 0, 50)
-                            billboard.StudsOffset = Vector3.new(0, 5, 0)
-                            billboard.AlwaysOnTop = true
-                            billboard.Parent = ESPFolder
-                            
-                            local textLabel = Instance.new("TextLabel")
-                            textLabel.Size = UDim2.new(1, 0, 1, 0)
-                            textLabel.BackgroundTransparency = 1
-                            textLabel.TextColor3 = rushColor
-                            textLabel.TextStrokeTransparency = 0.2
-                            textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-                            textLabel.TextScaled = true
-                            textLabel.Font = Enum.Font.GothamBold
-                            textLabel.Text = rushText
-                            textLabel.Parent = billboard
+                            textLabel.Text = "⚠️ RUSH - " .. math.floor(distance) .. " studs ⚠️"
                         end
                     end)
                     task.wait(0.1)
                 end
+                
+                -- Clean up when Rush despawns
+                if highlight then highlight:Destroy() end
+                if billboard then billboard:Destroy() end
+                warn("Rush despawned - ESP cleaned up")
             end)
         end
     end
@@ -466,49 +474,51 @@ local function setupAmbushDetection()
                 showEntityWarning("AMBUSH - HIDE AND STAY!", 5)
                 warn("⚠️ AMBUSH SPAWNED!")
                 AmbushModel:SetAttribute("ESPAdded", true)
+                
+                local highlight = Instance.new("Highlight")
+                highlight:SetAttribute("AmbushESP", true)
+                highlight.Adornee = AmbushModel
+                highlight.FillColor = ambushColor
+                highlight.OutlineColor = Color3.new(1, 0.5, 0)
+                highlight.FillTransparency = 0
+                highlight.OutlineTransparency = 0
+                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                highlight.Parent = AmbushModel
+                
+                local billboard = Instance.new("BillboardGui")
+                billboard:SetAttribute("AmbushESP", true)
+                billboard.Adornee = AmbushModel
+                billboard.Size = UDim2.new(0, 200, 0, 50)
+                billboard.StudsOffset = Vector3.new(0, 5, 0)
+                billboard.AlwaysOnTop = true
+                billboard.Parent = AmbushModel
+                
+                local textLabel = Instance.new("TextLabel")
+                textLabel.Size = UDim2.new(1, 0, 1, 0)
+                textLabel.BackgroundTransparency = 1
+                textLabel.TextColor3 = ambushColor
+                textLabel.TextStrokeTransparency = 0.2
+                textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+                textLabel.TextScaled = true
+                textLabel.Font = Enum.Font.GothamBold
+                textLabel.Parent = billboard
+                
                 while AmbushModel and AmbushModel.Parent do
                     pcall(function()
                         local playerPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position
                         if playerPos then
                             local ambushPos = AmbushModel:GetPivot().Position
                             local distance = (playerPos - ambushPos).Magnitude
-                            local ambushText = "⚠️ AMBUSH - " .. math.floor(distance) .. " studs ⚠️"
-                            for _, item in pairs(ESPFolder:GetChildren()) do
-                                if item:GetAttribute("AmbushESP") then item:Destroy() end
-                            end
-                            
-                            local highlight = Instance.new("Highlight")
-                            highlight:SetAttribute("AmbushESP", true)
-                            highlight.Adornee = AmbushModel
-                            highlight.FillColor = ambushColor
-                            highlight.OutlineColor = Color3.new(1, 0.5, 0)
-                            highlight.FillTransparency = 0
-                            highlight.OutlineTransparency = 0
-                            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                            highlight.Parent = ESPFolder
-                            
-                            local billboard = Instance.new("BillboardGui")
-                            billboard:SetAttribute("AmbushESP", true)
-                            billboard.Adornee = AmbushModel
-                            billboard.Size = UDim2.new(0, 200, 0, 50)
-                            billboard.StudsOffset = Vector3.new(0, 5, 0)
-                            billboard.AlwaysOnTop = true
-                            billboard.Parent = ESPFolder
-                            
-                            local textLabel = Instance.new("TextLabel")
-                            textLabel.Size = UDim2.new(1, 0, 1, 0)
-                            textLabel.BackgroundTransparency = 1
-                            textLabel.TextColor3 = ambushColor
-                            textLabel.TextStrokeTransparency = 0.2
-                            textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-                            textLabel.TextScaled = true
-                            textLabel.Font = Enum.Font.GothamBold
-                            textLabel.Text = ambushText
-                            textLabel.Parent = billboard
+                            textLabel.Text = "⚠️ AMBUSH - " .. math.floor(distance) .. " studs ⚠️"
                         end
                     end)
                     task.wait(0.1)
                 end
+                
+                -- Clean up when Ambush despawns
+                if highlight then highlight:Destroy() end
+                if billboard then billboard:Destroy() end
+                warn("Ambush despawned - ESP cleaned up")
             end)
         end
     end
@@ -522,59 +532,60 @@ local function setupAmbushDetection()
     end)
 end
 
--- Eyes detection and ESP
+-- Eyes detection and ESP (without notification since anti-eyes is active)
 local function setupEyesDetection()
     local function checkForEyes()
         local EyesModel = Workspace:FindFirstChild("Eyes")
         if EyesModel and not EyesModel:GetAttribute("ESPAdded") then
             local eyesColor = Color3.fromRGB(255, 255, 0)
             task.spawn(function()
-                showEntityWarning("EYES - DON'T LOOK!", 5)
-                warn("👁️ EYES SPAWNED!")
+                warn("👁️ EYES SPAWNED (Damage disabled)")
                 EyesModel:SetAttribute("ESPAdded", true)
+                
+                local highlight = Instance.new("Highlight")
+                highlight:SetAttribute("EyesESP", true)
+                highlight.Adornee = EyesModel
+                highlight.FillColor = eyesColor
+                highlight.OutlineColor = Color3.new(1, 1, 0)
+                highlight.FillTransparency = 0
+                highlight.OutlineTransparency = 0
+                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                highlight.Parent = EyesModel
+                
+                local billboard = Instance.new("BillboardGui")
+                billboard:SetAttribute("EyesESP", true)
+                billboard.Adornee = EyesModel
+                billboard.Size = UDim2.new(0, 200, 0, 50)
+                billboard.StudsOffset = Vector3.new(0, 5, 0)
+                billboard.AlwaysOnTop = true
+                billboard.Parent = EyesModel
+                
+                local textLabel = Instance.new("TextLabel")
+                textLabel.Size = UDim2.new(1, 0, 1, 0)
+                textLabel.BackgroundTransparency = 1
+                textLabel.TextColor3 = eyesColor
+                textLabel.TextStrokeTransparency = 0.2
+                textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+                textLabel.TextScaled = true
+                textLabel.Font = Enum.Font.GothamBold
+                textLabel.Parent = billboard
+                
                 while EyesModel and EyesModel.Parent do
                     pcall(function()
                         local playerPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position
                         if playerPos then
                             local eyesPos = EyesModel:GetPivot().Position
                             local distance = (playerPos - eyesPos).Magnitude
-                            local eyesText = "👁️ EYES - " .. math.floor(distance) .. " studs"
-                            for _, item in pairs(ESPFolder:GetChildren()) do
-                                if item:GetAttribute("EyesESP") then item:Destroy() end
-                            end
-                            
-                            local highlight = Instance.new("Highlight")
-                            highlight:SetAttribute("EyesESP", true)
-                            highlight.Adornee = EyesModel
-                            highlight.FillColor = eyesColor
-                            highlight.OutlineColor = Color3.new(1, 1, 0)
-                            highlight.FillTransparency = 0
-                            highlight.OutlineTransparency = 0
-                            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                            highlight.Parent = ESPFolder
-                            
-                            local billboard = Instance.new("BillboardGui")
-                            billboard:SetAttribute("EyesESP", true)
-                            billboard.Adornee = EyesModel
-                            billboard.Size = UDim2.new(0, 200, 0, 50)
-                            billboard.StudsOffset = Vector3.new(0, 5, 0)
-                            billboard.AlwaysOnTop = true
-                            billboard.Parent = ESPFolder
-                            
-                            local textLabel = Instance.new("TextLabel")
-                            textLabel.Size = UDim2.new(1, 0, 1, 0)
-                            textLabel.BackgroundTransparency = 1
-                            textLabel.TextColor3 = eyesColor
-                            textLabel.TextStrokeTransparency = 0.2
-                            textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-                            textLabel.TextScaled = true
-                            textLabel.Font = Enum.Font.GothamBold
-                            textLabel.Text = eyesText
-                            textLabel.Parent = billboard
+                            textLabel.Text = "👁️ EYES - " .. math.floor(distance) .. " studs (Safe)"
                         end
                     end)
                     task.wait(0.1)
                 end
+                
+                -- Clean up when Eyes despawns
+                if highlight then highlight:Destroy() end
+                if billboard then billboard:Destroy() end
+                warn("Eyes despawned - ESP cleaned up")
             end)
         end
     end
