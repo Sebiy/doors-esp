@@ -1025,14 +1025,15 @@ local function ApplyDoorESP(room)
     
     if not Settings.DoorESP then return end
     
-    local door = room:WaitForChild("Door", 2)
+    local door = room:FindFirstChild("Door")
     if not door then return end
     
     -- Skip if door is already opened
     if openedDoors[door] then return end
     
-    -- Skip if already has ESP
-    if door:FindFirstChild("ESPBillboard") then return end
+    -- Skip if already has ESP (check the door model, not just the parent)
+    local doorPart = door:FindFirstChild("Door")
+    if doorPart and doorPart:FindFirstChildOfClass("Highlight") then return end
     
     -- Check if locked by looking for KeyObtain in the room
     local key = room:FindFirstChild("KeyObtain", true)
@@ -1283,68 +1284,95 @@ CurrentRooms.ChildAdded:Connect(function(room)
     
     -- Monitor for items in this room
     room.DescendantAdded:Connect(function(descendant)
+        task.wait(0.1) -- Wait for item to fully load
+        
         -- Key detection
-        if descendant.Name == "KeyObtain" then
+        if descendant.Name == "KeyObtain" and Settings.KeyESP and not descendant:FindFirstChild("ESPBillboard") then
             ApplyKeyESP(descendant)
             warn(string.format("Key spawned in room %s", room.Name))
         end
         
-        -- Closet detection
-        if (descendant.Name == "Wardrobe" or descendant.Name:find("Closet")) and Settings.ClosetESP then
-            ApplyItemESP(descendant, "🚪 CLOSET", Settings.ClosetESPColor, "Closets")
+        -- Wardrobe detection (check if parent is Assets)
+        if descendant.Name == "Wardrobe" and descendant.Parent and descendant.Parent.Name == "Assets" and Settings.ClosetESP then
+            if not descendant:FindFirstChild("ESPBillboard") then
+                ApplyItemESP(descendant, "🚪 WARDROBE", Settings.ClosetESPColor, "Closets")
+            end
         end
         
-        -- Item detection
+        -- Item detection (handle items that might be inside parent models)
         local itemNames = {"Lighter", "Flashlight", "Lockpick", "Vitamins", "Crucifix", "Candle", "Battery", "ElectricalRoomKey", "SkeletonKey"}
         for _, itemName in pairs(itemNames) do
             if descendant.Name == itemName and Settings.ItemESP then
-                ApplyItemESP(descendant, "📦 " .. itemName:upper(), Settings.ItemESPColor, "Items")
+                -- Don't apply if it already has ESP
+                if not descendant:FindFirstChild("ESPBillboard") then
+                    ApplyItemESP(descendant, "📦 " .. itemName:upper(), Settings.ItemESPColor, "Items")
+                end
+                break
             end
         end
         
         -- Objective detection (Levers, Valves, etc)
-        if (descendant.Name == "LeverForGate" or descendant.Name:find("Lever") or descendant.Name:find("Valve") or descendant.Name == "MinesAnchor") and Settings.ObjectiveESP then
-            local objName = descendant.Name:find("Lever") and "⚡ LEVER" or (descendant.Name:find("Valve") and "🔧 VALVE" or "🎯 OBJECTIVE")
-            ApplyItemESP(descendant, objName, Settings.ObjectiveESPColor, "Objectives")
+        if Settings.ObjectiveESP then
+            if descendant.Name == "LeverForGate" or descendant.Name:find("Lever") or descendant.Name:find("Valve") or descendant.Name == "MinesAnchor" then
+                if not descendant:FindFirstChild("ESPBillboard") then
+                    local objName = descendant.Name:find("Lever") and "⚡ LEVER" or (descendant.Name:find("Valve") and "🔧 VALVE" or "🎯 OBJECTIVE")
+                    ApplyItemESP(descendant, objName, Settings.ObjectiveESPColor, "Objectives")
+                end
+            end
         end
         
         -- Gold detection
-        if (descendant.Name == "GoldPile" or descendant.Name:find("Gold")) and Settings.GoldESP then
-            ApplyItemESP(descendant, "💰 GOLD", Settings.GoldESPColor, "Gold")
+        if Settings.GoldESP then
+            if descendant.Name == "GoldPile" or descendant.Name:find("Gold") then
+                if not descendant:FindFirstChild("ESPBillboard") then
+                    ApplyItemESP(descendant, "💰 GOLD", Settings.GoldESPColor, "Gold")
+                end
+            end
         end
     end)
 end)
 
--- Function to scan room for items
+-- Function to scan room for items (with duplicate prevention)
 local function ScanRoomForItems(room)
     for _, descendant in pairs(room:GetDescendants()) do
         -- Key detection
-        if descendant.Name == "KeyObtain" and Settings.KeyESP then
+        if descendant.Name == "KeyObtain" and Settings.KeyESP and not descendant:FindFirstChild("ESPBillboard") then
             ApplyKeyESP(descendant)
         end
         
-        -- Closet detection
-        if (descendant.Name == "Wardrobe" or descendant.Name:find("Closet")) and Settings.ClosetESP then
-            ApplyItemESP(descendant, "🚪 CLOSET", Settings.ClosetESPColor, "Closets")
+        -- Wardrobe detection (check if parent is Assets)
+        if descendant.Name == "Wardrobe" and descendant.Parent and descendant.Parent.Name == "Assets" and Settings.ClosetESP then
+            if not descendant:FindFirstChild("ESPBillboard") then
+                ApplyItemESP(descendant, "🚪 WARDROBE", Settings.ClosetESPColor, "Closets")
+            end
         end
         
         -- Item detection
         local itemNames = {"Lighter", "Flashlight", "Lockpick", "Vitamins", "Crucifix", "Candle", "Battery", "ElectricalRoomKey", "SkeletonKey"}
         for _, itemName in pairs(itemNames) do
-            if descendant.Name == itemName and Settings.ItemESP then
+            if descendant.Name == itemName and Settings.ItemESP and not descendant:FindFirstChild("ESPBillboard") then
                 ApplyItemESP(descendant, "📦 " .. itemName:upper(), Settings.ItemESPColor, "Items")
+                break
             end
         end
         
         -- Objective detection
-        if (descendant.Name == "LeverForGate" or descendant.Name:find("Lever") or descendant.Name:find("Valve") or descendant.Name == "MinesAnchor") and Settings.ObjectiveESP then
-            local objName = descendant.Name:find("Lever") and "⚡ LEVER" or (descendant.Name:find("Valve") and "🔧 VALVE" or "🎯 OBJECTIVE")
-            ApplyItemESP(descendant, objName, Settings.ObjectiveESPColor, "Objectives")
+        if Settings.ObjectiveESP then
+            if (descendant.Name == "LeverForGate" or descendant.Name:find("Lever") or descendant.Name:find("Valve") or descendant.Name == "MinesAnchor") then
+                if not descendant:FindFirstChild("ESPBillboard") then
+                    local objName = descendant.Name:find("Lever") and "⚡ LEVER" or (descendant.Name:find("Valve") and "🔧 VALVE" or "🎯 OBJECTIVE")
+                    ApplyItemESP(descendant, objName, Settings.ObjectiveESPColor, "Objectives")
+                end
+            end
         end
         
         -- Gold detection
-        if (descendant.Name == "GoldPile" or descendant.Name:find("Gold")) and Settings.GoldESP then
-            ApplyItemESP(descendant, "💰 GOLD", Settings.GoldESPColor, "Gold")
+        if Settings.GoldESP then
+            if (descendant.Name == "GoldPile" or descendant.Name:find("Gold")) then
+                if not descendant:FindFirstChild("ESPBillboard") then
+                    ApplyItemESP(descendant, "💰 GOLD", Settings.GoldESPColor, "Gold")
+                end
+            end
         end
     end
 end
@@ -1603,8 +1631,33 @@ local function setupAmbushDetection()
     end)
 end
 
--- Eyes detection and ESP (without notification since anti-eyes is active)
+-- Eyes detection and damage prevention
 local function setupEyesDetection()
+    -- Anti-Eyes damage
+    local function preventEyesDamage()
+        local eyes = Workspace:FindFirstChild("Eyes")
+        if eyes then
+            -- Delete the damage script
+            for _, v in pairs(eyes:GetDescendants()) do
+                if v:IsA("Script") or v:IsA("LocalScript") then
+                    v:Destroy()
+                end
+            end
+            
+            -- Prevent eye contact damage
+            if LocalPlayer.Character then
+                local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+                if humanoid then
+                    humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+                end
+            end
+        end
+    end
+    
+    RunService.Heartbeat:Connect(function()
+        preventEyesDamage()
+    end)
+    
     local function checkForEyes()
         local EyesModel = Workspace:FindFirstChild("Eyes")
         if EyesModel and not EyesModel:GetAttribute("ESPAdded") then
@@ -1612,6 +1665,9 @@ local function setupEyesDetection()
             task.spawn(function()
                 warn("👁️ EYES SPAWNED (Damage disabled)")
                 EyesModel:SetAttribute("ESPAdded", true)
+                
+                -- Disable eyes damage immediately
+                preventEyesDamage()
                 
                 if not Settings.EntityESP then return end
                 
@@ -1672,32 +1728,59 @@ local function setupEyesDetection()
     end)
 end
 
--- Screech detection and deletion
+-- Screech detection and deletion (Improved)
 local function setupScreechProtection()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local Entities = ReplicatedStorage:WaitForChild("Entities")
     
+    -- Monitor for Screech in multiple locations
     local function deleteScreech()
         if not Settings.ScreechProtection then return end
-        local Screech = Entities:FindFirstChild("Screech")
-        if Screech then
-            Screech:Destroy()
-            warn("Screech deleted - You're safe!")
-            if Settings.EntityNotify then
-                showEntityWarning("SCREECH BLOCKED", 3)
+        
+        -- Check ReplicatedStorage
+        local entitiesFolder = ReplicatedStorage:FindFirstChild("Entities")
+        if entitiesFolder then
+            local Screech = entitiesFolder:FindFirstChild("Screech")
+            if Screech then
+                Screech:Destroy()
+                warn("Screech deleted from ReplicatedStorage!")
+                if Settings.EntityNotify then
+                    Library:Notify({Title = "SCREECH BLOCKED", Description = "Screech entity removed", Time = 3})
+                end
             end
+        end
+        
+        -- Check Workspace
+        local screechInWorkspace = Workspace:FindFirstChild("Screech", true)
+        if screechInWorkspace then
+            screechInWorkspace:Destroy()
+            warn("Screech deleted from Workspace!")
         end
     end
     
-    task.spawn(function() deleteScreech() end)
+    -- Continuous monitoring
+    RunService.Heartbeat:Connect(function()
+        if Settings.ScreechProtection then
+            deleteScreech()
+        end
+    end)
     
-    Entities.ChildAdded:Connect(function(child)
+    -- Also monitor ChildAdded
+    ReplicatedStorage.DescendantAdded:Connect(function(child)
         if child.Name == "Screech" and Settings.ScreechProtection then
+            task.wait(0.1)
             child:Destroy()
-            warn("Screech blocked!")
+            warn("Screech blocked on spawn!")
             if Settings.EntityNotify then
-                showEntityWarning("SCREECH BLOCKED", 3)
+                Library:Notify({Title = "SCREECH BLOCKED", Description = "Screech prevented from spawning", Time = 3})
             end
+        end
+    end)
+    
+    Workspace.DescendantAdded:Connect(function(child)
+        if child.Name == "Screech" and Settings.ScreechProtection then
+            task.wait(0.1)
+            child:Destroy()
+            warn("Screech blocked in workspace!")
         end
     end)
 end
@@ -1792,69 +1875,33 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Lever/Valve Aura System
-RunService.Heartbeat:Connect(function()
-    if not Settings.LeverValveAura or not LocalPlayer.Character then return end
-    
-    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    
-    for _, room in pairs(CurrentRooms:GetChildren()) do
-        for _, descendant in pairs(room:GetDescendants()) do
-            if (descendant.Name:find("Lever") or descendant.Name:find("Valve")) and descendant:FindFirstChildOfClass("ProximityPrompt") then
-                local distance = (hrp.Position - descendant:GetPivot().Position).Magnitude
-                if distance <= 15 then
-                    local prompt = descendant:FindFirstChildOfClass("ProximityPrompt")
-                    if prompt and fireproximityprompt then
-                        fireproximityprompt(prompt)
-                    end
-                end
-            end
-        end
-    end
-end)
-
--- Loot Aura System
-RunService.Heartbeat:Connect(function()
-    if not Settings.LootAura or not LocalPlayer.Character then return end
-    
-    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    
-    for _, room in pairs(CurrentRooms:GetChildren()) do
-        for _, descendant in pairs(room:GetDescendants()) do
-            if (descendant.Name == "DrawerContainer" or descendant.Name:find("Drawer") or descendant.Name == "ChestBox") and descendant:FindFirstChildOfClass("ProximityPrompt") then
-                local distance = (hrp.Position - descendant:GetPivot().Position).Magnitude
-                if distance <= 12 then
-                    local prompt = descendant:FindFirstChildOfClass("ProximityPrompt")
-                    if prompt and fireproximityprompt then
-                        fireproximityprompt(prompt)
-                    end
-                end
-            end
-        end
-    end
-end)
-
--- Auto Collect Books System
-RunService.Heartbeat:Connect(function()
-    if not Settings.AutoCollectBooks or not LocalPlayer.Character then return end
-    
-    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    
-    for _, room in pairs(CurrentRooms:GetChildren()) do
-        local assets = room:FindFirstChild("Assets")
-        if assets then
-            local shelf = assets:FindFirstChild("Shelf")
-            if shelf then
-                for _, obj in pairs(shelf:GetDescendants()) do
-                    if obj.Name == "Book" and obj:FindFirstChild("ClickDetector") then
-                        local distance = (hrp.Position - obj.Position).Magnitude
-                        if distance <= 15 and fireclickdetector then
-                            pcall(function()
-                                fireclickdetector(obj.ClickDetector)
-                            end)
+-- Lever/Valve Aura System (Fixed with proper checks)
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if Settings.LeverValveAura and LocalPlayer.Character then
+            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                for _, room in pairs(CurrentRooms:GetChildren()) do
+                    for _, descendant in pairs(room:GetDescendants()) do
+                        if (descendant.Name:find("Lever") or descendant.Name:find("Valve")) then
+                            local prompt = descendant:FindFirstChildOfClass("ProximityPrompt")
+                            if prompt then
+                                local targetPos = descendant:IsA("Model") and descendant:GetPivot().Position or descendant.Position
+                                local distance = (hrp.Position - targetPos).Magnitude
+                                if distance <= 15 then
+                                    if fireproximityprompt then
+                                        pcall(function()
+                                            fireproximityprompt(prompt)
+                                        end)
+                                    else
+                                        -- Fallback: teleport close and trigger
+                                        prompt:InputHoldBegin()
+                                        task.wait(0.1)
+                                        prompt:InputHoldEnd()
+                                    end
+                                end
+                            end
                         end
                     end
                 end
@@ -1863,23 +1910,101 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Locked Door Aura System
-RunService.Heartbeat:Connect(function()
-    if not Settings.LockedDoorAura or not LocalPlayer.Character then return end
-    
-    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    
-    for _, room in pairs(CurrentRooms:GetChildren()) do
-        local door = room:FindFirstChild("Door")
-        if door then
-            local lock = door:FindFirstChild("Lock")
-            if lock then
-                local prompt = lock:FindFirstChildOfClass("ProximityPrompt")
-                if prompt then
-                    local distance = (hrp.Position - lock:GetPivot().Position).Magnitude
-                    if distance <= 15 and fireproximityprompt then
-                        fireproximityprompt(prompt)
+-- Loot Aura System (Fixed with proper checks)
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        if Settings.LootAura and LocalPlayer.Character then
+            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                for _, room in pairs(CurrentRooms:GetChildren()) do
+                    for _, descendant in pairs(room:GetDescendants()) do
+                        if (descendant.Name == "DrawerContainer" or descendant.Name:find("Drawer") or descendant.Name == "ChestBox") then
+                            local prompt = descendant:FindFirstChildOfClass("ProximityPrompt")
+                            if prompt then
+                                local targetPos = descendant:IsA("Model") and descendant:GetPivot().Position or descendant.Position
+                                local distance = (hrp.Position - targetPos).Magnitude
+                                if distance <= 12 then
+                                    if fireproximityprompt then
+                                        pcall(function()
+                                            fireproximityprompt(prompt)
+                                        end)
+                                    else
+                                        prompt:InputHoldBegin()
+                                        task.wait(0.1)
+                                        prompt:InputHoldEnd()
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Auto Collect Books System (Fixed with proper checks)
+task.spawn(function()
+    while true do
+        task.wait(0.4)
+        if Settings.AutoCollectBooks and LocalPlayer.Character then
+            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                for _, room in pairs(CurrentRooms:GetChildren()) do
+                    local assets = room:FindFirstChild("Assets")
+                    if assets then
+                        local shelf = assets:FindFirstChild("Shelf")
+                        if shelf then
+                            for _, obj in pairs(shelf:GetDescendants()) do
+                                if obj.Name == "Book" and obj:FindFirstChild("ClickDetector") then
+                                    local distance = (hrp.Position - obj.Position).Magnitude
+                                    if distance <= 15 then
+                                        if fireclickdetector then
+                                            pcall(function()
+                                                fireclickdetector(obj.ClickDetector)
+                                            end)
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Locked Door Aura System (Fixed with proper checks)
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if Settings.LockedDoorAura and LocalPlayer.Character then
+            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                for _, room in pairs(CurrentRooms:GetChildren()) do
+                    local door = room:FindFirstChild("Door")
+                    if door then
+                        local lock = door:FindFirstChild("Lock")
+                        if lock then
+                            local prompt = lock:FindFirstChildOfClass("ProximityPrompt")
+                            if prompt then
+                                local targetPos = lock:IsA("Model") and lock:GetPivot().Position or lock.Position
+                                local distance = (hrp.Position - targetPos).Magnitude
+                                if distance <= 15 then
+                                    if fireproximityprompt then
+                                        pcall(function()
+                                            fireproximityprompt(prompt)
+                                        end)
+                                    else
+                                        prompt:InputHoldBegin()
+                                        task.wait(0.1)
+                                        prompt:InputHoldEnd()
+                                    end
+                                end
+                            end
+                        end
                     end
                 end
             end
@@ -1897,12 +2022,17 @@ setupScreechProtection()
 setupPredictiveWarnings()
 warn("Entity detection system initialized!")
 
--- Fullbright
+-- Fullbright System
 local Lighting = game:GetService("Lighting")
-Lighting.Ambient = Color3.new(1, 1, 1)
-Lighting.Brightness = 2
-Lighting.FogEnd = 100000
-Lighting.GlobalShadows = false
+RunService.Heartbeat:Connect(function()
+    if Settings.Fullbright then
+        Lighting.Ambient = Color3.new(1, 1, 1)
+        Lighting.Brightness = Settings.Brightness
+        Lighting.FogEnd = 100000
+        Lighting.GlobalShadows = false
+        Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+    end
+end)
 
 -- Noclip
 local noclip = false
