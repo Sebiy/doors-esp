@@ -418,17 +418,27 @@ ESPItemsGroup:AddToggle("DoorESP", {
 })
 
 ESPItemsGroup:AddToggle("ClosetESP", {
-    Text = "Closet ESP enabled",
+    Text = "Closet/Wardrobe ESP enabled",
     Default = Settings.ClosetESP,
     Callback = function(Value)
         Settings.ClosetESP = Value
         if Value then
-            -- Apply ESP to all existing closets
+            -- Apply ESP to all existing wardrobes/closets
             for _, room in pairs(CurrentRooms:GetChildren()) do
                 task.spawn(function()
+                    -- Direct check in Assets
+                    local assets = room:FindFirstChild("Assets")
+                    if assets then
+                        local wardrobe = assets:FindFirstChild("Wardrobe")
+                        if wardrobe and not wardrobe:FindFirstChild("ESPBillboard") then
+                            ApplyItemESP(wardrobe, "🚪 WARDROBE", Settings.ClosetESPColor, "Closets")
+                            warn("Wardrobe ESP applied in room " .. room.Name)
+                        end
+                    end
+                    -- Also scan all descendants
                     for _, descendant in pairs(room:GetDescendants()) do
                         if (descendant.Name == "Wardrobe" or descendant.Name:find("Closet")) and not descendant:FindFirstChild("ESPBillboard") then
-                            ApplyItemESP(descendant, "🚪 CLOSET", Settings.ClosetESPColor, "Closets")
+                            ApplyItemESP(descendant, "🚪 WARDROBE", Settings.ClosetESPColor, "Closets")
                         end
                     end
                 end)
@@ -501,18 +511,34 @@ ESPItemsGroup:AddToggle("ItemESP", {
 })
 
 ESPItemsGroup:AddToggle("ObjectiveESP", {
-    Text = "Objective ESP enabled",
+    Text = "Objective ESP enabled (Levers/Valves)",
     Default = Settings.ObjectiveESP,
     Callback = function(Value)
         Settings.ObjectiveESP = Value
         if Value then
-            -- Apply ESP to all existing objectives
+            -- Apply ESP to all existing objectives including LeverForGate
             for _, room in pairs(CurrentRooms:GetChildren()) do
                 task.spawn(function()
+                    local assets = room:FindFirstChild("Assets")
+                    if assets then
+                        -- Direct LeverForGate check
+                        local lever = assets:FindFirstChild("LeverForGate")
+                        if lever and not lever:FindFirstChild("ESPBillboard") then
+                            ApplyItemESP(lever, "⚡ LEVER FOR GATE", Settings.ObjectiveESPColor, "Objectives")
+                            warn("LeverForGate ESP applied in room " .. room.Name)
+                        end
+                    end
+                    -- Check all descendants
                     for _, descendant in pairs(room:GetDescendants()) do
-                        if (descendant.Name == "LeverForGate" or descendant.Name:find("Lever") or descendant.Name:find("Valve") or descendant.Name == "MinesAnchor") and not descendant:FindFirstChild("ESPBillboard") then
-                            local objName = descendant.Name:find("Lever") and "⚡ LEVER" or (descendant.Name:find("Valve") and "🔧 VALVE" or "🎯 OBJECTIVE")
-                            ApplyItemESP(descendant, objName, Settings.ObjectiveESPColor, "Objectives")
+                        if not descendant:FindFirstChild("ESPBillboard") then
+                            if descendant.Name == "LeverForGate" then
+                                ApplyItemESP(descendant, "⚡ LEVER FOR GATE", Settings.ObjectiveESPColor, "Objectives")
+                            elseif descendant.Name:find("Lever") or descendant.Name:find("Valve") or descendant.Name == "MinesAnchor" then
+                                local objName = descendant.Name:find("Lever") and "⚡ LEVER" or (descendant.Name:find("Valve") and "🔧 VALVE" or "🎯 OBJECTIVE")
+                                ApplyItemESP(descendant, objName, Settings.ObjectiveESPColor, "Objectives")
+                            elseif descendant.Name == "LibraryHintPaper" then
+                                ApplyItemESP(descendant, "📄 LIBRARY HINT", Settings.ObjectiveESPColor, "Objectives")
+                            end
                         end
                     end
                 end)
@@ -1154,16 +1180,18 @@ end
 
 -- Item ESP Function (updated with tracking and proper ESP type detection)
 local function ApplyItemESP(item, itemName, color, espType)
-    -- Skip if already has ESP
+    -- Skip if already has ESP (check both item and parent)
     if item:FindFirstChild("ESPBillboard") then return end
+    if item.Parent and item.Parent:FindFirstChild("ESPBillboard") then return end
     
-    -- CRITICAL: Prevent furniture (Wardrobe, Bookcase) from being detected as items
-    -- Check if this is actually furniture containing items
-    if item.Name == "Wardrobe" or item.Name == "Bookcase" or item.Name == "Cabinet" then
-        -- Only allow if explicitly called for Closet ESP
-        if espType ~= "Closets" then
-            return
-        end
+    -- CRITICAL: Prevent furniture from being detected as items (unless it's Closet ESP)
+    if (item.Name == "Wardrobe" or item.Name == "Bookcase" or item.Name == "Cabinet") and espType ~= "Closets" then
+        return
+    end
+    
+    -- Skip Bookcase entirely - it's not useful
+    if item.Name == "Bookcase" then
+        return
     end
     
     -- Determine ESP type based on item name if not provided
@@ -1442,11 +1470,17 @@ local function ScanRoomForItems(room)
     end
 end
 
--- Apply ESP to existing rooms
-for _, room in pairs(CurrentRooms:GetChildren()) do
-    ApplyDoorESP(room)
-    ScanRoomForItems(room)
-end
+-- Apply ESP to existing rooms (with delay to ensure everything loads)
+task.spawn(function()
+    task.wait(1) -- Wait for script to fully initialize
+    for _, room in pairs(CurrentRooms:GetChildren()) do
+        task.spawn(function()
+            ApplyDoorESP(room)
+            ScanRoomForItems(room)
+        end)
+    end
+    warn("Initial room scan complete!")
+end)
 
 -- Instant key detection on spawn (removed 2 second delay)
 CurrentRooms.DescendantAdded:Connect(function(descendant)
@@ -1455,6 +1489,20 @@ CurrentRooms.DescendantAdded:Connect(function(descendant)
         if not descendant:FindFirstChild("ESPBillboard") then
             ApplyKeyESP(descendant)
             warn(string.format("Key detected instantly: %s", descendant:GetFullName()))
+        end
+    end
+end)
+
+-- Also scan for keys on script load (for first key)
+task.spawn(function()
+    task.wait(0.5)
+    if Settings.KeyESP then
+        for _, room in pairs(CurrentRooms:GetChildren()) do
+            local key = room:FindFirstChild("KeyObtain", true)
+            if key and not key:FindFirstChild("ESPBillboard") then
+                ApplyKeyESP(key)
+                warn(string.format("Initial key found in room %s", room.Name))
+            end
         end
     end
 end)
@@ -1687,35 +1735,52 @@ local function setupAmbushDetection()
     -- Removed duplicate ChildAdded notification - it's handled in checkForAmbush()
 end
 
--- Eyes detection and damage prevention (ULTRA AGGRESSIVE)
+-- Eyes detection and damage prevention (HOOK-BASED - Prevents damage via RemoteEvent blocking)
 local function setupEyesDetection()
-    -- Anti-Eyes damage (destroy immediately and completely)
-    local function preventEyesDamage()
-        local eyes = Workspace:FindFirstChild("Eyes")
-        if eyes then
-            -- INSTANTLY destroy the entire model
-            eyes:Destroy()
-            warn("👁️ Eyes entity INSTANTLY DESTROYED!")
-            if Settings.EntityNotify then
-                Library:Notify({Title = "👁️ EYES DELETED", Description = "Eyes completely destroyed - no damage!", Time = 3})
+    -- Hook RemoteEvents to block Eyes damage
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local RemotesFolder = ReplicatedStorage:FindFirstChild("RemotesFolder")
+    
+    if RemotesFolder then
+        for _, remote in pairs(RemotesFolder:GetChildren()) do
+            if remote:IsA("RemoteEvent") then
+                remote.OnClientEvent:Connect(function(...)
+                    local args = {...}
+                    -- Block Eyes-related damage events
+                    if args[1] and typeof(args[1]) == "string" then
+                        if args[1]:lower():find("eyes") or args[1]:lower():find("jumpscare") then
+                            warn("Blocked Eyes damage event!")
+                            return
+                        end
+                    end
+                end)
             end
         end
     end
     
-    -- Ultra-fast monitoring (every frame)
+    -- Continuously heal player while Eyes exists
     RunService.Heartbeat:Connect(function()
-        if Settings.ScreechProtection then -- Use ScreechProtection toggle for Eyes too
-            preventEyesDamage()
+        if Settings.ScreechProtection then
+            local eyes = Workspace:FindFirstChild("Eyes")
+            if eyes and LocalPlayer.Character then
+                local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+                if humanoid then
+                    humanoid.Health = humanoid.MaxHealth
+                end
+                -- Also destroy Eyes to remove the visual
+                eyes:Destroy()
+            end
         end
     end)
     
     -- Instant detection on spawn
     Workspace.ChildAdded:Connect(function(child)
-        if child.Name == "Eyes" then
+        if child.Name == "Eyes" and Settings.ScreechProtection then
+            task.wait() -- Let it spawn
             child:Destroy()
             warn("👁️ Eyes spawn blocked!")
             if Settings.EntityNotify then
-                Library:Notify({Title = "👁️ EYES BLOCKED", Description = "Eyes spawn prevented!", Time = 3})
+                Library:Notify({Title = "👁️ EYES BLOCKED", Description = "Eyes entity removed!", Time = 3})
             end
         end
     end)
