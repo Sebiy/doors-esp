@@ -1151,13 +1151,22 @@ local function ApplyItemESP(item, itemName, color, espType)
     -- Skip if already has ESP
     if item:FindFirstChild("ESPBillboard") then return end
     
+    -- CRITICAL: Prevent furniture (Wardrobe, Bookcase) from being detected as items
+    -- Check if this is actually furniture containing items
+    if item.Name == "Wardrobe" or item.Name == "Bookcase" or item.Name == "Cabinet" then
+        -- Only allow if explicitly called for Closet ESP
+        if espType ~= "Closets" then
+            return
+        end
+    end
+    
     -- Determine ESP type based on item name if not provided
     if not espType then
         if itemName:find("KEY") or itemName:find("🔑") then
             espType = "Keys"
         elseif itemName:find("DOOR") then
             espType = "Doors"
-        elseif itemName:find("CLOSET") or itemName:find("Wardrobe") then
+        elseif itemName:find("CLOSET") or itemName:find("WARDROBE") then
             espType = "Closets"
         elseif itemName:find("LEVER") or itemName:find("VALVE") or itemName:find("PANEL") or itemName:find("BREAKER") then
             espType = "Objectives"
@@ -1299,15 +1308,35 @@ CurrentRooms.ChildAdded:Connect(function(room)
             end
         end
         
-        -- Item detection (handle items that might be inside parent models)
+        -- Item detection (FIXED: prevent furniture children from being detected)
         local itemNames = {"Lighter", "Flashlight", "Lockpick", "Vitamins", "Crucifix", "Candle", "Battery", "ElectricalRoomKey", "SkeletonKey"}
         for _, itemName in pairs(itemNames) do
             if descendant.Name == itemName and Settings.ItemESP then
-                -- Don't apply if it already has ESP
-                if not descendant:FindFirstChild("ESPBillboard") then
-                    ApplyItemESP(descendant, "📦 " .. itemName:upper(), Settings.ItemESPColor, "Items")
+                -- Check if parent is furniture (Wardrobe, Bookcase, Cabinet) - if so, skip
+                local parent = descendant.Parent
+                if parent and (parent.Name == "Wardrobe" or parent.Name == "Bookcase" or parent.Name == "Cabinet" or parent.Name == "Dresser") then
+                    -- Skip items inside furniture
+                else
+                    -- Don't apply if it already has ESP
+                    if not descendant:FindFirstChild("ESPBillboard") then
+                        ApplyItemESP(descendant, "📦 " .. itemName:upper(), Settings.ItemESPColor, "Items")
+                    end
                 end
                 break
+            end
+        end
+        
+        -- LeverForGate detection
+        if descendant.Name == "LeverForGate" and Settings.ObjectiveESP then
+            if not descendant:FindFirstChild("ESPBillboard") then
+                ApplyItemESP(descendant, "⚡ LEVER", Settings.ObjectiveESPColor, "Objectives")
+            end
+        end
+        
+        -- Smoothie detection
+        if descendant.Name == "Smoothie" and Settings.ItemESP then
+            if not descendant:FindFirstChild("ESPBillboard") then
+                ApplyItemESP(descendant, "🥤 SMOOTHIE", Settings.ItemESPColor, "Items")
             end
         end
         
@@ -1347,13 +1376,29 @@ local function ScanRoomForItems(room)
             end
         end
         
-        -- Item detection
+        -- Item detection (FIXED: prevent furniture children from being detected)
         local itemNames = {"Lighter", "Flashlight", "Lockpick", "Vitamins", "Crucifix", "Candle", "Battery", "ElectricalRoomKey", "SkeletonKey"}
         for _, itemName in pairs(itemNames) do
             if descendant.Name == itemName and Settings.ItemESP and not descendant:FindFirstChild("ESPBillboard") then
-                ApplyItemESP(descendant, "📦 " .. itemName:upper(), Settings.ItemESPColor, "Items")
+                -- Check if parent is furniture - if so, skip
+                local parent = descendant.Parent
+                if parent and (parent.Name == "Wardrobe" or parent.Name == "Bookcase" or parent.Name == "Cabinet" or parent.Name == "Dresser") then
+                    -- Skip items inside furniture
+                else
+                    ApplyItemESP(descendant, "📦 " .. itemName:upper(), Settings.ItemESPColor, "Items")
+                end
                 break
             end
+        end
+        
+        -- LeverForGate detection
+        if descendant.Name == "LeverForGate" and Settings.ObjectiveESP and not descendant:FindFirstChild("ESPBillboard") then
+            ApplyItemESP(descendant, "⚡ LEVER", Settings.ObjectiveESPColor, "Objectives")
+        end
+        
+        -- Smoothie detection
+        if descendant.Name == "Smoothie" and Settings.ItemESP and not descendant:FindFirstChild("ESPBillboard") then
+            ApplyItemESP(descendant, "🥤 SMOOTHIE", Settings.ItemESPColor, "Items")
         end
         
         -- Objective detection
@@ -1383,18 +1428,13 @@ for _, room in pairs(CurrentRooms:GetChildren()) do
     ScanRoomForItems(room)
 end
 
--- Continuously scan for keys every 2 seconds
-task.spawn(function()
-    while true do
-        task.wait(2)
-        if Settings.KeyESP then
-            for _, room in pairs(CurrentRooms:GetChildren()) do
-                local hasKey = room:FindFirstChild("KeyObtain", true)
-                if hasKey and not hasKey:FindFirstChild("ESPBillboard") then
-                    warn(string.format("Found unhighlighted key in room %s, applying ESP", room.Name))
-                    ApplyKeyESP(hasKey)
-                end
-            end
+-- Instant key detection on spawn (removed 2 second delay)
+CurrentRooms.DescendantAdded:Connect(function(descendant)
+    if descendant.Name == "KeyObtain" and Settings.KeyESP then
+        task.wait(0.1)
+        if not descendant:FindFirstChild("ESPBillboard") then
+            ApplyKeyESP(descendant)
+            warn(string.format("Key detected instantly: %s", descendant:GetFullName()))
         end
     end
 end)
@@ -1487,7 +1527,7 @@ local ESPFolder = Instance.new("Folder")
 ESPFolder.Name = "EntityESP"
 ESPFolder.Parent = Workspace
 
--- Rush detection and ESP
+-- Rush detection and ESP (FIXED)
 local function setupRushDetection()
     local function checkForRush()
         local RushModel = Workspace:FindFirstChild("RushMoving")
@@ -1495,7 +1535,7 @@ local function setupRushDetection()
             local rushColor = Color3.fromRGB(255, 25, 25)
             task.spawn(function()
                 if Settings.EntityNotify then
-                    showEntityWarning("RUSH - HIDE IMMEDIATELY!", 5)
+                    Library:Notify({Title = "⚠️ RUSH DETECTED", Description = "HIDE IMMEDIATELY!", Time = 5})
                 end
                 warn("⚠️ RUSH SPAWNED!")
                 RushModel:SetAttribute("ESPAdded", true)
@@ -1554,12 +1594,12 @@ local function setupRushDetection()
     
     Workspace.ChildAdded:Connect(function(child)
         if child.Name == "RushMoving" and Settings.EntityNotify then
-            showEntityWarning("RUSH INCOMING - HIDE!", 5)
+            Library:Notify({Title = "⚠️ RUSH INCOMING", Description = "Get in a closet NOW!", Time = 5})
         end
     end)
 end
 
--- Ambush detection and ESP
+-- Ambush detection and ESP (FIXED)
 local function setupAmbushDetection()
     local function checkForAmbush()
         local AmbushModel = Workspace:FindFirstChild("AmbushMoving")
@@ -1567,7 +1607,7 @@ local function setupAmbushDetection()
             local ambushColor = Color3.fromRGB(255, 100, 0)
             task.spawn(function()
                 if Settings.EntityNotify then
-                    showEntityWarning("AMBUSH - HIDE AND STAY!", 5)
+                    Library:Notify({Title = "⚠️ AMBUSH DETECTED", Description = "HIDE AND STAY IN CLOSET!", Time = 5})
                 end
                 warn("⚠️ AMBUSH SPAWNED!")
                 AmbushModel:SetAttribute("ESPAdded", true)
@@ -1626,36 +1666,57 @@ local function setupAmbushDetection()
     
     Workspace.ChildAdded:Connect(function(child)
         if child.Name == "AmbushMoving" and Settings.EntityNotify then
-            showEntityWarning("AMBUSH INCOMING!", 5)
+            Library:Notify({Title = "⚠️ AMBUSH INCOMING", Description = "Multiple rebounds - stay hidden!", Time = 5})
         end
     end)
 end
 
--- Eyes detection and damage prevention
+-- Eyes detection and damage prevention (FIXED)
 local function setupEyesDetection()
-    -- Anti-Eyes damage
+    -- Anti-Eyes damage (improved method)
     local function preventEyesDamage()
         local eyes = Workspace:FindFirstChild("Eyes")
         if eyes then
-            -- Delete the damage script
+            -- Method 1: Delete all scripts
             for _, v in pairs(eyes:GetDescendants()) do
-                if v:IsA("Script") or v:IsA("LocalScript") then
+                if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("ModuleScript") then
                     v:Destroy()
                 end
             end
             
-            -- Prevent eye contact damage
-            if LocalPlayer.Character then
-                local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
-                if humanoid then
-                    humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+            -- Method 2: Delete damage parts
+            local eyesParts = {"Core", "Main", "DamagePart", "Hitbox"}
+            for _, partName in pairs(eyesParts) do
+                local part = eyes:FindFirstChild(partName, true)
+                if part then
+                    part:Destroy()
                 end
             end
+            
+            -- Method 3: Destroy entire Eyes model after a moment
+            task.delay(0.5, function()
+                if eyes and eyes.Parent then
+                    eyes:Destroy()
+                    warn("Eyes entity completely removed!")
+                    if Settings.EntityNotify then
+                        Library:Notify({Title = "👁️ EYES DELETED", Description = "Eyes entity completely removed - you're safe!", Time = 3})
+                    end
+                end
+            end)
         end
     end
     
+    -- Continuous monitoring with faster response
     RunService.Heartbeat:Connect(function()
         preventEyesDamage()
+    end)
+    
+    -- Also monitor for Eyes spawn
+    Workspace.ChildAdded:Connect(function(child)
+        if child.Name == "Eyes" then
+            task.wait(0.1)
+            preventEyesDamage()
+        end
     end)
     
     local function checkForEyes()
@@ -1663,11 +1724,14 @@ local function setupEyesDetection()
         if EyesModel and not EyesModel:GetAttribute("ESPAdded") then
             local eyesColor = Color3.fromRGB(255, 255, 0)
             task.spawn(function()
-                warn("👁️ EYES SPAWNED (Damage disabled)")
                 EyesModel:SetAttribute("ESPAdded", true)
                 
                 -- Disable eyes damage immediately
                 preventEyesDamage()
+                
+                if Settings.EntityNotify then
+                    Library:Notify({Title = "👁️ EYES SPAWNED", Description = "Eyes detected - damage disabled!", Time = 4})
+                end
                 
                 if not Settings.EntityESP then return end
                 
@@ -1722,8 +1786,11 @@ local function setupEyesDetection()
     RunService.Heartbeat:Connect(checkForEyes)
     
     Workspace.ChildAdded:Connect(function(child)
-        if child.Name == "Eyes" and Settings.EntityNotify then
-            showEntityWarning("EYES SPAWNED!", 5)
+        if child.Name == "Eyes" then
+            preventEyesDamage()
+            if Settings.EntityNotify then
+                Library:Notify({Title = "👁️ EYES DETECTED", Description = "Eyes entity removed - no damage!", Time = 4})
+            end
         end
     end)
 end
@@ -1785,7 +1852,7 @@ local function setupScreechProtection()
     end)
 end
 
--- Predictive entity warning system
+-- Predictive entity warning system (FIXED with MSPaint notifications)
 local function setupPredictiveWarnings()
     -- Monitor for flickering lights (Rush/Ambush warning)
     local function monitorLights()
@@ -1796,8 +1863,8 @@ local function setupPredictiveWarnings()
                 for _, descendant in pairs(assets:GetDescendants()) do
                     if descendant:IsA("Light") or descendant:IsA("PointLight") or descendant:IsA("SpotLight") then
                         descendant:GetPropertyChangedSignal("Enabled"):Connect(function()
-                            if not descendant.Enabled then
-                                showEntityWarning("⚡ LIGHTS FLICKERING - ENTITY APPROACHING!", 4)
+                            if not descendant.Enabled and Settings.EntityNotify then
+                                Library:Notify({Title = "⚡ LIGHTS FLICKERING", Description = "Entity approaching - prepare to hide!", Time = 4})
                                 warn("⚡ Light flicker detected - Entity incoming!")
                             end
                         end)
@@ -1910,7 +1977,7 @@ task.spawn(function()
     end
 end)
 
--- Loot Aura System (Fixed with proper checks)
+-- Loot Aura System (Fixed with proper checks + Smoothie support)
 task.spawn(function()
     while true do
         task.wait(0.3)
@@ -1919,6 +1986,7 @@ task.spawn(function()
             if hrp then
                 for _, room in pairs(CurrentRooms:GetChildren()) do
                     for _, descendant in pairs(room:GetDescendants()) do
+                        -- Drawer/Chest detection
                         if (descendant.Name == "DrawerContainer" or descendant.Name:find("Drawer") or descendant.Name == "ChestBox") then
                             local prompt = descendant:FindFirstChildOfClass("ProximityPrompt")
                             if prompt then
@@ -1928,6 +1996,27 @@ task.spawn(function()
                                     if fireproximityprompt then
                                         pcall(function()
                                             fireproximityprompt(prompt)
+                                        end)
+                                    else
+                                        prompt:InputHoldBegin()
+                                        task.wait(0.1)
+                                        prompt:InputHoldEnd()
+                                    end
+                                end
+                            end
+                        end
+                        
+                        -- Smoothie auto-collect
+                        if descendant.Name == "Smoothie" then
+                            local prompt = descendant:FindFirstChildOfClass("ProximityPrompt")
+                            if prompt then
+                                local targetPos = descendant:IsA("Model") and descendant:GetPivot().Position or descendant.Position
+                                local distance = (hrp.Position - targetPos).Magnitude
+                                if distance <= 15 then
+                                    if fireproximityprompt then
+                                        pcall(function()
+                                            fireproximityprompt(prompt)
+                                            warn("Smoothie collected!")
                                         end)
                                     else
                                         prompt:InputHoldBegin()
