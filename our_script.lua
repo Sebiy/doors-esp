@@ -140,6 +140,14 @@ MiscGroup:AddToggle("InstantInteract", {
     Default = Settings.InstantInteract,
     Callback = function(Value)
         Settings.InstantInteract = Value
+        -- Apply to all existing prompts
+        for _, prompt in pairs(workspace:GetDescendants()) do
+            if prompt:IsA("ProximityPrompt") then
+                if Value then
+                    prompt.HoldDuration = 0
+                end
+            end
+        end
     end
 })
 
@@ -149,6 +157,9 @@ MiscGroup:AddToggle("BreakVoid", {
     Default = Settings.BreakVoid,
     Callback = function(Value)
         Settings.BreakVoid = Value
+        if Value then
+            warn("Break Void enabled - you won't fall through the world")
+        end
     end
 })
 
@@ -158,6 +169,14 @@ MiscGroup:AddToggle("NoCutscenes", {
     Default = Settings.NoCutscenes,
     Callback = function(Value)
         Settings.NoCutscenes = Value
+        if Value then
+            -- Disable camera cutscenes by setting camera CFrame instantly
+            local camera = workspace.CurrentCamera
+            if camera then
+                camera.CameraType = Enum.CameraType.Custom
+            end
+            warn("No Cutscenes enabled")
+        end
     end
 })
 
@@ -167,6 +186,17 @@ MiscGroup:AddToggle("DoorReach", {
     Default = Settings.DoorReach,
     Callback = function(Value)
         Settings.DoorReach = Value
+        -- Apply to all existing door prompts
+        for _, room in pairs(CurrentRooms:GetChildren()) do
+            local door = room:FindFirstChild("Door")
+            if door then
+                for _, prompt in pairs(door:GetDescendants()) do
+                    if prompt:IsA("ProximityPrompt") then
+                        prompt.MaxActivationDistance = Value and 20 or 10
+                    end
+                end
+            end
+        end
     end
 })
 
@@ -347,13 +377,24 @@ ESPItemsGroup:AddToggle("DoorESP", {
     Default = Settings.DoorESP,
     Callback = function(Value)
         Settings.DoorESP = Value
-        -- Apply ESP to all existing rooms when toggled ON
         if Value then
+            -- Apply ESP to all existing rooms when toggled ON
             for _, room in pairs(CurrentRooms:GetChildren()) do
                 task.spawn(function()
                     ApplyDoorESP(room)
                 end)
             end
+        else
+            -- Clear all door ESP when toggled OFF
+            for _, espData in pairs(ESPObjects.Doors) do
+                if espData.highlight and espData.highlight.Parent then
+                    espData.highlight:Destroy()
+                end
+                if espData.billboard and espData.billboard.Parent then
+                    espData.billboard:Destroy()
+                end
+            end
+            ESPObjects.Doors = {}
         end
     end
 }):AddColorPicker("DoorESPColor", {
@@ -361,6 +402,18 @@ ESPItemsGroup:AddToggle("DoorESP", {
     Title = "Door ESP Color",
     Callback = function(Value)
         Settings.DoorESPColor = Value
+        -- Update all existing door ESP colors
+        for _, espData in pairs(ESPObjects.Doors) do
+            if espData.highlight and espData.highlight.Parent then
+                espData.highlight.FillColor = Value
+            end
+            if espData.billboard and espData.billboard.Parent then
+                local label = espData.billboard:FindFirstChild("ESPLabel")
+                if label then
+                    label.TextColor3 = Value
+                end
+            end
+        end
     end
 })
 
@@ -369,12 +422,38 @@ ESPItemsGroup:AddToggle("ClosetESP", {
     Default = Settings.ClosetESP,
     Callback = function(Value)
         Settings.ClosetESP = Value
+        if Value then
+            -- Apply ESP to all existing closets
+            for _, room in pairs(CurrentRooms:GetChildren()) do
+                task.spawn(function()
+                    for _, descendant in pairs(room:GetDescendants()) do
+                        if (descendant.Name == "Wardrobe" or descendant.Name:find("Closet")) and not descendant:FindFirstChild("ESPBillboard") then
+                            ApplyItemESP(descendant, "🚪 CLOSET", Settings.ClosetESPColor, "Closets")
+                        end
+                    end
+                end)
+            end
+        else
+            -- Clear all closet ESP
+            for _, espData in pairs(ESPObjects.Closets) do
+                if espData.highlight and espData.highlight.Parent then espData.highlight:Destroy() end
+                if espData.billboard and espData.billboard.Parent then espData.billboard:Destroy() end
+            end
+            ESPObjects.Closets = {}
+        end
     end
 }):AddColorPicker("ClosetESPColor", {
     Default = Settings.ClosetESPColor,
     Title = "Closet ESP Color",
     Callback = function(Value)
         Settings.ClosetESPColor = Value
+        for _, espData in pairs(ESPObjects.Closets) do
+            if espData.highlight and espData.highlight.Parent then espData.highlight.FillColor = Value end
+            if espData.billboard and espData.billboard.Parent then
+                local label = espData.billboard:FindFirstChild("ESPLabel")
+                if label then label.TextColor3 = Value end
+            end
+        end
     end
 })
 
@@ -383,12 +462,41 @@ ESPItemsGroup:AddToggle("ItemESP", {
     Default = Settings.ItemESP,
     Callback = function(Value)
         Settings.ItemESP = Value
+        if Value then
+            -- Apply ESP to all existing items
+            local itemNames = {"Lighter", "Flashlight", "Lockpick", "Vitamins", "Crucifix", "Candle", "Battery", "ElectricalRoomKey", "SkeletonKey"}
+            for _, room in pairs(CurrentRooms:GetChildren()) do
+                task.spawn(function()
+                    for _, descendant in pairs(room:GetDescendants()) do
+                        for _, itemName in pairs(itemNames) do
+                            if descendant.Name == itemName and not descendant:FindFirstChild("ESPBillboard") then
+                                ApplyItemESP(descendant, "📦 " .. itemName:upper(), Settings.ItemESPColor, "Items")
+                            end
+                        end
+                    end
+                end)
+            end
+        else
+            -- Clear all item ESP
+            for _, espData in pairs(ESPObjects.Items) do
+                if espData.highlight and espData.highlight.Parent then espData.highlight:Destroy() end
+                if espData.billboard and espData.billboard.Parent then espData.billboard:Destroy() end
+            end
+            ESPObjects.Items = {}
+        end
     end
 }):AddColorPicker("ItemESPColor", {
     Default = Settings.ItemESPColor,
     Title = "Item ESP Color",
     Callback = function(Value)
         Settings.ItemESPColor = Value
+        for _, espData in pairs(ESPObjects.Items) do
+            if espData.highlight and espData.highlight.Parent then espData.highlight.FillColor = Value end
+            if espData.billboard and espData.billboard.Parent then
+                local label = espData.billboard:FindFirstChild("ESPLabel")
+                if label then label.TextColor3 = Value end
+            end
+        end
     end
 })
 
@@ -397,12 +505,39 @@ ESPItemsGroup:AddToggle("ObjectiveESP", {
     Default = Settings.ObjectiveESP,
     Callback = function(Value)
         Settings.ObjectiveESP = Value
+        if Value then
+            -- Apply ESP to all existing objectives
+            for _, room in pairs(CurrentRooms:GetChildren()) do
+                task.spawn(function()
+                    for _, descendant in pairs(room:GetDescendants()) do
+                        if (descendant.Name == "LeverForGate" or descendant.Name:find("Lever") or descendant.Name:find("Valve") or descendant.Name == "MinesAnchor") and not descendant:FindFirstChild("ESPBillboard") then
+                            local objName = descendant.Name:find("Lever") and "⚡ LEVER" or (descendant.Name:find("Valve") and "🔧 VALVE" or "🎯 OBJECTIVE")
+                            ApplyItemESP(descendant, objName, Settings.ObjectiveESPColor, "Objectives")
+                        end
+                    end
+                end)
+            end
+        else
+            -- Clear all objective ESP
+            for _, espData in pairs(ESPObjects.Objectives) do
+                if espData.highlight and espData.highlight.Parent then espData.highlight:Destroy() end
+                if espData.billboard and espData.billboard.Parent then espData.billboard:Destroy() end
+            end
+            ESPObjects.Objectives = {}
+        end
     end
 }):AddColorPicker("ObjectiveESPColor", {
     Default = Settings.ObjectiveESPColor,
     Title = "Objective ESP Color",
     Callback = function(Value)
         Settings.ObjectiveESPColor = Value
+        for _, espData in pairs(ESPObjects.Objectives) do
+            if espData.highlight and espData.highlight.Parent then espData.highlight.FillColor = Value end
+            if espData.billboard and espData.billboard.Parent then
+                local label = espData.billboard:FindFirstChild("ESPLabel")
+                if label then label.TextColor3 = Value end
+            end
+        end
     end
 })
 
@@ -411,12 +546,38 @@ ESPItemsGroup:AddToggle("GoldESP", {
     Default = Settings.GoldESP,
     Callback = function(Value)
         Settings.GoldESP = Value
+        if Value then
+            -- Apply ESP to all existing gold
+            for _, room in pairs(CurrentRooms:GetChildren()) do
+                task.spawn(function()
+                    for _, descendant in pairs(room:GetDescendants()) do
+                        if (descendant.Name == "GoldPile" or descendant.Name:find("Gold")) and not descendant:FindFirstChild("ESPBillboard") then
+                            ApplyItemESP(descendant, "💰 GOLD", Settings.GoldESPColor, "Gold")
+                        end
+                    end
+                end)
+            end
+        else
+            -- Clear all gold ESP
+            for _, espData in pairs(ESPObjects.Gold) do
+                if espData.highlight and espData.highlight.Parent then espData.highlight:Destroy() end
+                if espData.billboard and espData.billboard.Parent then espData.billboard:Destroy() end
+            end
+            ESPObjects.Gold = {}
+        end
     end
 }):AddColorPicker("GoldESPColor", {
     Default = Settings.GoldESPColor,
     Title = "Gold ESP Color",
     Callback = function(Value)
         Settings.GoldESPColor = Value
+        for _, espData in pairs(ESPObjects.Gold) do
+            if espData.highlight and espData.highlight.Parent then espData.highlight.FillColor = Value end
+            if espData.billboard and espData.billboard.Parent then
+                local label = espData.billboard:FindFirstChild("ESPLabel")
+                if label then label.TextColor3 = Value end
+            end
+        end
     end
 })
 
@@ -425,8 +586,8 @@ ESPItemsGroup:AddToggle("KeyESP", {
     Default = Settings.KeyESP,
     Callback = function(Value)
         Settings.KeyESP = Value
-        -- Apply ESP to all existing keys when toggled ON
         if Value then
+            -- Apply ESP to all existing keys when toggled ON
             for _, room in pairs(CurrentRooms:GetChildren()) do
                 task.spawn(function()
                     for _, descendant in pairs(room:GetDescendants()) do
@@ -436,6 +597,17 @@ ESPItemsGroup:AddToggle("KeyESP", {
                     end
                 end)
             end
+        else
+            -- Clear all key ESP when toggled OFF
+            for _, espData in pairs(ESPObjects.Keys) do
+                if espData.highlight and espData.highlight.Parent then
+                    espData.highlight:Destroy()
+                end
+                if espData.billboard and espData.billboard.Parent then
+                    espData.billboard:Destroy()
+                end
+            end
+            ESPObjects.Keys = {}
         end
     end
 }):AddColorPicker("KeyESPColor", {
@@ -443,6 +615,18 @@ ESPItemsGroup:AddToggle("KeyESP", {
     Title = "Key ESP Color",
     Callback = function(Value)
         Settings.KeyESPColor = Value
+        -- Update all existing key ESP colors
+        for _, espData in pairs(ESPObjects.Keys) do
+            if espData.highlight and espData.highlight.Parent then
+                espData.highlight.FillColor = Value
+            end
+            if espData.billboard and espData.billboard.Parent then
+                local label = espData.billboard:FindFirstChild("ESPLabel")
+                if label then
+                    label.TextColor3 = Value
+                end
+            end
+        end
     end
 })
 
@@ -765,8 +949,20 @@ warn("vesper.lua loaded! Press RightShift to toggle menu")
 -- Track opened doors
 local openedDoors = {}
 
+-- ESP Tracking Tables (for live color updates)
+local ESPObjects = {
+    Doors = {},
+    Keys = {},
+    Closets = {},
+    Items = {},
+    Objectives = {},
+    Gold = {},
+    Entities = {},
+    Players = {}
+}
+
 -- Helper function to create highlights
-local function CreateHighlight(part, fillColor, outlineColor, fillTrans, outlineTrans)
+local function CreateHighlight(part, fillColor, outlineColor, fillTrans, outlineTrans, espType)
     if part:FindFirstChildOfClass("Highlight") then
         part:FindFirstChildOfClass("Highlight"):Destroy()
     end
@@ -778,11 +974,18 @@ local function CreateHighlight(part, fillColor, outlineColor, fillTrans, outline
     highlight.FillTransparency = fillTrans or 0.5
     highlight.OutlineTransparency = outlineTrans or 0
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Name = "ESP_" .. (espType or "Generic")
+    
+    -- Track this highlight for live color updates
+    if espType and ESPObjects[espType] then
+        table.insert(ESPObjects[espType], {highlight = highlight, billboard = nil, parent = part})
+    end
+    
     return highlight
 end
 
 -- Helper function to create billboards
-local function CreateBillboard(parent, text, textColor, yOffset)
+local function CreateBillboard(parent, text, textColor, yOffset, espType)
     local billboard = Instance.new("BillboardGui")
     billboard.Parent = parent
     billboard.AlwaysOnTop = true
@@ -800,6 +1003,17 @@ local function CreateBillboard(parent, text, textColor, yOffset)
     label.Text = text
     label.Font = Enum.Font.SourceSansBold
     label.TextSize = 22
+    label.Name = "ESPLabel"
+    
+    -- Track this billboard for live color updates
+    if espType and ESPObjects[espType] then
+        for _, entry in pairs(ESPObjects[espType]) do
+            if entry.parent == parent and not entry.billboard then
+                entry.billboard = billboard
+                break
+            end
+        end
+    end
     
     return billboard
 end
@@ -817,33 +1031,39 @@ local function ApplyDoorESP(room)
     -- Skip if door is already opened
     if openedDoors[door] then return end
     
+    -- Skip if already has ESP
+    if door:FindFirstChild("ESPBillboard") then return end
+    
     -- Check if locked by looking for KeyObtain in the room
     local key = room:FindFirstChild("KeyObtain", true)
     local isLocked = (key ~= nil)
     
     -- Colors
-    local fillColor = isLocked and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50)
     local outlineColor = isLocked and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(0, 200, 0)
     
     -- Apply highlight to the door MeshPart (Door.Door)
     local doorPart = door:FindFirstChild("Door")
     if doorPart then
         if doorPart:IsA("MeshPart") or (doorPart:IsA("BasePart") and doorPart.Transparency < 1) then
-            CreateHighlight(doorPart, Settings.DoorESPColor or Color3.fromRGB(255, 255, 0), outlineColor, 0.4, 0)
+            CreateHighlight(doorPart, Settings.DoorESPColor or Color3.fromRGB(255, 255, 0), outlineColor, 0.4, 0, "Doors")
         end
     end
     
     -- Create billboard (add +1 to match in-game door numbers)
     local displayNumber = roomNumber + 1
     local text = string.format("DOOR %d\n%s", displayNumber, isLocked and "🔒 LOCKED" or "✓ OPEN")
-    local textColor = isLocked and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(100, 255, 100)
-    CreateBillboard(door, text, textColor, 5)
+    local textColor = Settings.DoorESPColor or Color3.fromRGB(255, 255, 0)
+    CreateBillboard(door, text, textColor, 5, "Doors")
     
     -- Instant unlock proximity prompts and monitor for door opening
     for _, descendant in pairs(door:GetDescendants()) do
         if descendant:IsA("ProximityPrompt") then
-            descendant.HoldDuration = 0
-            descendant.MaxActivationDistance = 15
+            if Settings.InstantInteract then
+                descendant.HoldDuration = 0
+            end
+            if Settings.DoorReach then
+                descendant.MaxActivationDistance = 20
+            end
             
             -- Monitor door opening via Triggered event
             descendant.Triggered:Connect(function()
@@ -852,6 +1072,13 @@ local function ApplyDoorESP(room)
                 for _, child in pairs(door:GetDescendants()) do
                     if child:IsA("Highlight") or child.Name == "ESPBillboard" then
                         child:Destroy()
+                    end
+                end
+                -- Remove from tracking
+                for i, espData in ipairs(ESPObjects.Doors) do
+                    if espData.parent == doorPart or espData.parent == door then
+                        table.remove(ESPObjects.Doors, i)
+                        break
                     end
                 end
                 warn(string.format("Door %d opened - ESP cleared", displayNumber))
@@ -888,35 +1115,96 @@ end
 local function ApplyKeyESP(key)
     if not Settings.KeyESP then return end
     
+    -- Skip if already has ESP
+    if key:FindFirstChild("ESPBillboard") then return end
+    
     -- Apply highlight to the key model
     for _, part in pairs(key:GetDescendants()) do
         if part:IsA("BasePart") then
-            CreateHighlight(part, Color3.fromRGB(255, 255, 0), Color3.fromRGB(200, 200, 0), 0.3, 0)
+            CreateHighlight(part, Settings.KeyESPColor or Color3.fromRGB(255, 255, 0), Color3.fromRGB(200, 200, 0), 0.3, 0, "Keys")
         end
     end
     
     -- Create billboard
-    CreateBillboard(key, "🔑 KEY", Color3.fromRGB(255, 255, 0), 3)
+    CreateBillboard(key, "🔑 KEY", Settings.KeyESPColor or Color3.fromRGB(255, 255, 0), 3, "Keys")
+    
+    -- Monitor for key collection (when destroyed or parented to player)
+    key.AncestryChanged:Connect(function()
+        if not key:IsDescendantOf(game.Workspace) then
+            -- Remove from tracking when collected
+            for i, espData in ipairs(ESPObjects.Keys) do
+                if espData.parent == key or (espData.parent and espData.parent:IsDescendantOf(key)) then
+                    table.remove(ESPObjects.Keys, i)
+                    break
+                end
+            end
+            warn("Key collected - ESP cleared")
+        end
+    end)
+    
     warn("Key ESP applied!")
 end
 
--- Item ESP Function
-local function ApplyItemESP(item, itemName, color)
-    if not Settings.ItemESP then return end
+-- Item ESP Function (updated with tracking and proper ESP type detection)
+local function ApplyItemESP(item, itemName, color, espType)
+    -- Skip if already has ESP
+    if item:FindFirstChild("ESPBillboard") then return end
+    
+    -- Determine ESP type based on item name if not provided
+    if not espType then
+        if itemName:find("KEY") or itemName:find("🔑") then
+            espType = "Keys"
+        elseif itemName:find("DOOR") then
+            espType = "Doors"
+        elseif itemName:find("CLOSET") or itemName:find("Wardrobe") then
+            espType = "Closets"
+        elseif itemName:find("LEVER") or itemName:find("VALVE") or itemName:find("PANEL") or itemName:find("BREAKER") then
+            espType = "Objectives"
+        elseif itemName:find("COIN") or itemName:find("GOLD") or itemName:find("💰") then
+            espType = "Gold"
+        else
+            espType = "Items"
+        end
+    end
+    
+    -- Check if this ESP type is enabled
+    local isEnabled = false
+    if espType == "Keys" and Settings.KeyESP then isEnabled = true
+    elseif espType == "Doors" and Settings.DoorESP then isEnabled = true
+    elseif espType == "Closets" and Settings.ClosetESP then isEnabled = true
+    elseif espType == "Objectives" and Settings.ObjectiveESP then isEnabled = true
+    elseif espType == "Gold" and Settings.GoldESP then isEnabled = true
+    elseif espType == "Items" and Settings.ItemESP then isEnabled = true
+    end
+    
+    if not isEnabled then return end
     
     -- Apply highlight
     if item:IsA("Model") then
         for _, part in pairs(item:GetDescendants()) do
             if part:IsA("BasePart") then
-                CreateHighlight(part, color, Color3.new(color.R * 0.8, color.G * 0.8, color.B * 0.8), 0.3, 0)
+                CreateHighlight(part, color, Color3.new(color.R * 0.8, color.G * 0.8, color.B * 0.8), 0.3, 0, espType)
             end
         end
     elseif item:IsA("BasePart") then
-        CreateHighlight(item, color, Color3.new(color.R * 0.8, color.G * 0.8, color.B * 0.8), 0.3, 0)
+        CreateHighlight(item, color, Color3.new(color.R * 0.8, color.G * 0.8, color.B * 0.8), 0.3, 0, espType)
     end
     
     -- Create billboard
-    CreateBillboard(item, itemName, color, 3)
+    CreateBillboard(item, itemName, color, 3, espType)
+    
+    -- Monitor for item collection/destruction
+    item.AncestryChanged:Connect(function()
+        if not item:IsDescendantOf(game.Workspace) then
+            for i, espData in ipairs(ESPObjects[espType] or {}) do
+                if espData.parent == item or (espData.parent and espData.parent:IsDescendantOf(item)) then
+                    table.remove(ESPObjects[espType], i)
+                    break
+                end
+            end
+        end
+    end)
+    
     warn(string.format("%s ESP applied!", itemName))
 end
 
@@ -989,49 +1277,75 @@ CurrentRooms.ChildAdded:Connect(function(room)
     ApplyDoorESP(room)
     
     -- Check for library
-    SolveLibrary(room)
+    if Settings.AutoLibraryCode then
+        SolveLibrary(room)
+    end
     
     -- Monitor for items in this room
     room.DescendantAdded:Connect(function(descendant)
-        -- Key detection (recursively check for KeyObtain)
+        -- Key detection
         if descendant.Name == "KeyObtain" then
             ApplyKeyESP(descendant)
             warn(string.format("Key spawned in room %s", room.Name))
         end
         
-        -- Lever detection
-        if descendant.Name == "LeverForGate" and Settings.ObjectiveESP then
-            ApplyItemESP(descendant, "⚡ LEVER", Settings.ObjectiveESPColor or Color3.fromRGB(168, 85, 247))
+        -- Closet detection
+        if (descendant.Name == "Wardrobe" or descendant.Name:find("Closet")) and Settings.ClosetESP then
+            ApplyItemESP(descendant, "🚪 CLOSET", Settings.ClosetESPColor, "Closets")
         end
         
-        -- Coin detection
-        if descendant.Name == "GoldPile" and Settings.GoldESP then
-            ApplyItemESP(descendant, "💰 COINS", Settings.GoldESPColor or Color3.fromRGB(255, 215, 0))
-            AutoCollectCoin(descendant)
+        -- Item detection
+        local itemNames = {"Lighter", "Flashlight", "Lockpick", "Vitamins", "Crucifix", "Candle", "Battery", "ElectricalRoomKey", "SkeletonKey"}
+        for _, itemName in pairs(itemNames) do
+            if descendant.Name == itemName and Settings.ItemESP then
+                ApplyItemESP(descendant, "📦 " .. itemName:upper(), Settings.ItemESPColor, "Items")
+            end
+        end
+        
+        -- Objective detection (Levers, Valves, etc)
+        if (descendant.Name == "LeverForGate" or descendant.Name:find("Lever") or descendant.Name:find("Valve") or descendant.Name == "MinesAnchor") and Settings.ObjectiveESP then
+            local objName = descendant.Name:find("Lever") and "⚡ LEVER" or (descendant.Name:find("Valve") and "🔧 VALVE" or "🎯 OBJECTIVE")
+            ApplyItemESP(descendant, objName, Settings.ObjectiveESPColor, "Objectives")
+        end
+        
+        -- Gold detection
+        if (descendant.Name == "GoldPile" or descendant.Name:find("Gold")) and Settings.GoldESP then
+            ApplyItemESP(descendant, "💰 GOLD", Settings.GoldESPColor, "Gold")
         end
     end)
 end)
 
 -- Function to scan room for items
 local function ScanRoomForItems(room)
-    local foundKey = false
-    -- Check existing items (recursively search for KeyObtain)
     for _, descendant in pairs(room:GetDescendants()) do
+        -- Key detection
         if descendant.Name == "KeyObtain" and Settings.KeyESP then
-            foundKey = true
             ApplyKeyESP(descendant)
-            warn(string.format("Found existing key in room %s at path: %s", room.Name, descendant:GetFullName()))
         end
-        if descendant.Name == "LeverForGate" and Settings.ObjectiveESP then
-            ApplyItemESP(descendant, "⚡ LEVER", Settings.ObjectiveESPColor or Color3.fromRGB(168, 85, 247))
+        
+        -- Closet detection
+        if (descendant.Name == "Wardrobe" or descendant.Name:find("Closet")) and Settings.ClosetESP then
+            ApplyItemESP(descendant, "🚪 CLOSET", Settings.ClosetESPColor, "Closets")
         end
-        if descendant.Name == "GoldPile" and Settings.GoldESP then
-            ApplyItemESP(descendant, "💰 COINS", Settings.GoldESPColor or Color3.fromRGB(255, 215, 0))
-            AutoCollectCoin(descendant)
+        
+        -- Item detection
+        local itemNames = {"Lighter", "Flashlight", "Lockpick", "Vitamins", "Crucifix", "Candle", "Battery", "ElectricalRoomKey", "SkeletonKey"}
+        for _, itemName in pairs(itemNames) do
+            if descendant.Name == itemName and Settings.ItemESP then
+                ApplyItemESP(descendant, "📦 " .. itemName:upper(), Settings.ItemESPColor, "Items")
+            end
         end
-    end
-    if not foundKey then
-        warn(string.format("No key found in room %s", room.Name))
+        
+        -- Objective detection
+        if (descendant.Name == "LeverForGate" or descendant.Name:find("Lever") or descendant.Name:find("Valve") or descendant.Name == "MinesAnchor") and Settings.ObjectiveESP then
+            local objName = descendant.Name:find("Lever") and "⚡ LEVER" or (descendant.Name:find("Valve") and "🔧 VALVE" or "🎯 OBJECTIVE")
+            ApplyItemESP(descendant, objName, Settings.ObjectiveESPColor, "Objectives")
+        end
+        
+        -- Gold detection
+        if (descendant.Name == "GoldPile" or descendant.Name:find("Gold")) and Settings.GoldESP then
+            ApplyItemESP(descendant, "💰 GOLD", Settings.GoldESPColor, "Gold")
+        end
     end
 end
 
@@ -1451,6 +1765,129 @@ local function setupPredictiveWarnings()
     monitorLights()
     warn("Predictive warnings enabled - monitoring lights and RemoteEvents!")
 end
+
+-- Global Proximity Prompt Monitoring
+workspace.DescendantAdded:Connect(function(descendant)
+    if descendant:IsA("ProximityPrompt") then
+        task.wait(0.1) -- Let it initialize
+        if Settings.InstantInteract then
+            descendant.HoldDuration = 0
+        end
+        -- Check if it's a door prompt for door reach
+        local isDoor = descendant:FindFirstAncestorOfClass("Model") and descendant:FindFirstAncestorOfClass("Model").Name == "Door"
+        if isDoor and Settings.DoorReach then
+            descendant.MaxActivationDistance = 20
+        end
+    end
+end)
+
+-- Break Void Loop
+RunService.Heartbeat:Connect(function()
+    if Settings.BreakVoid and LocalPlayer.Character then
+        local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if hrp and hrp.Position.Y < -200 then
+            hrp.CFrame = hrp.CFrame + Vector3.new(0, 400, 0)
+            warn("Prevented void fall!")
+        end
+    end
+end)
+
+-- Lever/Valve Aura System
+RunService.Heartbeat:Connect(function()
+    if not Settings.LeverValveAura or not LocalPlayer.Character then return end
+    
+    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    for _, room in pairs(CurrentRooms:GetChildren()) do
+        for _, descendant in pairs(room:GetDescendants()) do
+            if (descendant.Name:find("Lever") or descendant.Name:find("Valve")) and descendant:FindFirstChildOfClass("ProximityPrompt") then
+                local distance = (hrp.Position - descendant:GetPivot().Position).Magnitude
+                if distance <= 15 then
+                    local prompt = descendant:FindFirstChildOfClass("ProximityPrompt")
+                    if prompt and fireproximityprompt then
+                        fireproximityprompt(prompt)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Loot Aura System
+RunService.Heartbeat:Connect(function()
+    if not Settings.LootAura or not LocalPlayer.Character then return end
+    
+    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    for _, room in pairs(CurrentRooms:GetChildren()) do
+        for _, descendant in pairs(room:GetDescendants()) do
+            if (descendant.Name == "DrawerContainer" or descendant.Name:find("Drawer") or descendant.Name == "ChestBox") and descendant:FindFirstChildOfClass("ProximityPrompt") then
+                local distance = (hrp.Position - descendant:GetPivot().Position).Magnitude
+                if distance <= 12 then
+                    local prompt = descendant:FindFirstChildOfClass("ProximityPrompt")
+                    if prompt and fireproximityprompt then
+                        fireproximityprompt(prompt)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Auto Collect Books System
+RunService.Heartbeat:Connect(function()
+    if not Settings.AutoCollectBooks or not LocalPlayer.Character then return end
+    
+    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    for _, room in pairs(CurrentRooms:GetChildren()) do
+        local assets = room:FindFirstChild("Assets")
+        if assets then
+            local shelf = assets:FindFirstChild("Shelf")
+            if shelf then
+                for _, obj in pairs(shelf:GetDescendants()) do
+                    if obj.Name == "Book" and obj:FindFirstChild("ClickDetector") then
+                        local distance = (hrp.Position - obj.Position).Magnitude
+                        if distance <= 15 and fireclickdetector then
+                            pcall(function()
+                                fireclickdetector(obj.ClickDetector)
+                            end)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Locked Door Aura System
+RunService.Heartbeat:Connect(function()
+    if not Settings.LockedDoorAura or not LocalPlayer.Character then return end
+    
+    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    for _, room in pairs(CurrentRooms:GetChildren()) do
+        local door = room:FindFirstChild("Door")
+        if door then
+            local lock = door:FindFirstChild("Lock")
+            if lock then
+                local prompt = lock:FindFirstChildOfClass("ProximityPrompt")
+                if prompt then
+                    local distance = (hrp.Position - lock:GetPivot().Position).Magnitude
+                    if distance <= 15 and fireproximityprompt then
+                        fireproximityprompt(prompt)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+warn("Global systems initialized: Proximity monitoring, Break Void, Auras")
 
 -- Initialize entity detection (always setup, but checks Settings dynamically)
 setupRushDetection()
