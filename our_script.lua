@@ -80,6 +80,10 @@ local Settings = {
 
 local ESPRegistry = {} -- Tracks ALL ESP objects by instance
 local OpenedDoors = {} -- Tracks opened doors
+local CurrentPlayerRoom = nil -- Track player's current room
+
+-- Forward declarations for fullbright (defined later)
+local ApplyFullbright, RestoreLighting
 
 local function ClearESP(instance)
     if ESPRegistry[instance] then
@@ -94,20 +98,41 @@ local function HasESP(instance)
     return ESPRegistry[instance] ~= nil
 end
 
-local function ApplyESP(instance, text, color, espType)
+local function ClearESPInRoom(roomName)
+    local toRemove = {}
+    for instance, data in pairs(ESPRegistry) do
+        if data.roomName == roomName then
+            table.insert(toRemove, instance)
+        end
+    end
+    for _, instance in ipairs(toRemove) do
+        ClearESP(instance)
+    end
+end
+
+local function ApplyESP(instance, text, color, espType, roomName)
     if HasESP(instance) then return end
     
     local highlight, billboard
     
-    -- Create highlight
+    -- Create highlight on specific part only (not whole model)
     local targetPart = instance
     if instance:IsA("Model") then
-        targetPart = instance.PrimaryPart or instance:FindFirstChildWhichIsA("BasePart")
+        -- For doors, find the actual door mesh part
+        if espType == "Door" then
+            targetPart = instance:FindFirstChild("Door") -- The actual door part
+            if not targetPart then
+                targetPart = instance:FindFirstChildWhichIsA("MeshPart")
+            end
+        else
+            targetPart = instance.PrimaryPart or instance:FindFirstChildWhichIsA("BasePart")
+        end
     end
     
     if targetPart and targetPart:IsA("BasePart") then
         highlight = Instance.new("Highlight")
-        highlight.Parent = instance
+        highlight.Parent = targetPart -- Parent to specific part, not model
+        highlight.Adornee = targetPart -- Adorn to specific part only
         highlight.FillColor = color
         highlight.OutlineColor = Color3.new(color.R * 0.7, color.G * 0.7, color.B * 0.7)
         highlight.FillTransparency = 0.4
@@ -139,7 +164,8 @@ local function ApplyESP(instance, text, color, espType)
         highlight = highlight,
         billboard = billboard,
         espType = espType,
-        color = color
+        color = color,
+        roomName = roomName
     }
     
     -- Auto-cleanup when destroyed
@@ -184,6 +210,17 @@ end
 -- ESP APPLICATION FUNCTIONS
 -- ═══════════════════════════════════════════════════════════
 
+local function GetRoomName(instance)
+    local current = instance
+    while current and current.Parent do
+        if current.Parent == CurrentRooms then
+            return current.Name
+        end
+        current = current.Parent
+    end
+    return nil
+end
+
 local function ApplyDoorESP(room)
     if not Settings.DoorESP then return end
     
@@ -196,13 +233,14 @@ local function ApplyDoorESP(room)
     
     local doorPart = door:FindFirstChild("Door")
     if not doorPart then return end
-    if HasESP(door) then return end
+    if HasESP(doorPart) then return end -- Check the door part, not model
     
     local hasKey = room:FindFirstChild("KeyObtain", true) ~= nil
     local displayNum = roomNum + 1
     local text = string.format("DOOR %d\n%s", displayNum, hasKey and "LOCKED" or "OPEN")
     
-    ApplyESP(door, text, Settings.DoorESPColor, "Door")
+    -- Apply ESP to the door PART specifically
+    ApplyESP(doorPart, text, Settings.DoorESPColor, "Door", room.Name)
     
     -- Monitor door opening
     for _, desc in pairs(door:GetDescendants()) do
@@ -212,7 +250,7 @@ local function ApplyDoorESP(room)
             
             desc.Triggered:Connect(function()
                 OpenedDoors[door] = true
-                ClearESP(door)
+                ClearESP(doorPart)
                 warn(string.format("Door %d opened - ESP cleared", displayNum))
             end)
         end
@@ -221,7 +259,7 @@ local function ApplyDoorESP(room)
     door:GetAttributeChangedSignal("Opened"):Connect(function()
         if door:GetAttribute("Opened") then
             OpenedDoors[door] = true
-            ClearESP(door)
+            ClearESP(doorPart)
         end
     end)
 end
@@ -229,25 +267,25 @@ end
 local function ApplyKeyESP(key)
     if not Settings.KeyESP then return end
     if HasESP(key) then return end
-    ApplyESP(key, "KEY", Settings.KeyESPColor, "Key")
+    ApplyESP(key, "KEY", Settings.KeyESPColor, "Key", GetRoomName(key))
 end
 
 local function ApplyWardrobeESP(wardrobe)
     if not Settings.ClosetESP then return end
     if HasESP(wardrobe) then return end
-    ApplyESP(wardrobe, "WARDROBE", Settings.ClosetESPColor, "Closet")
+    ApplyESP(wardrobe, "WARDROBE", Settings.ClosetESPColor, "Closet", GetRoomName(wardrobe))
 end
 
 local function ApplyObjectiveESP(obj, name)
     if not Settings.ObjectiveESP then return end
     if HasESP(obj) then return end
-    ApplyESP(obj, name, Settings.ObjectiveESPColor, "Objective")
+    ApplyESP(obj, name, Settings.ObjectiveESPColor, "Objective", GetRoomName(obj))
 end
 
 local function ApplyGoldESP(gold)
     if not Settings.GoldESP then return end
     if HasESP(gold) then return end
-    ApplyESP(gold, "GOLD", Settings.GoldESPColor, "Gold")
+    ApplyESP(gold, "GOLD", Settings.GoldESPColor, "Gold", GetRoomName(gold))
 end
 
 local function ApplyItemESP(item, name)
@@ -263,7 +301,7 @@ local function ApplyItemESP(item, name)
         end
     end
     
-    ApplyESP(item, name, Settings.ItemESPColor, "Item")
+    ApplyESP(item, name, Settings.ItemESPColor, "Item", GetRoomName(item))
 end
 
 -- ═══════════════════════════════════════════════════════════
@@ -800,15 +838,10 @@ LightingGroup:AddToggle("Fullbright", {
     Default = false,
     Callback = function(Value)
         Settings.Fullbright = Value
-        local Lighting = game:GetService("Lighting")
         if Value then
-            Lighting.Brightness = Settings.Brightness
-            Lighting.Ambient = Color3.new(1, 1, 1)
-            Lighting.FogEnd = 100000
+            ApplyFullbright()
         else
-            Lighting.Brightness = 1
-            Lighting.Ambient = Color3.new(0, 0, 0)
-            Lighting.FogEnd = 500
+            RestoreLighting()
         end
     end
 })
@@ -888,6 +921,12 @@ CurrentRooms.ChildAdded:Connect(function(room)
     ScanRoom(room)
 end)
 
+-- Clean up ESP when rooms are removed (player moves forward)
+CurrentRooms.ChildRemoved:Connect(function(room)
+    ClearESPInRoom(room.Name)
+    warn("Room " .. room.Name .. " removed - ESP cleared")
+end)
+
 CurrentRooms.DescendantAdded:Connect(function(desc)
     task.wait(0.1)
     local name = desc.Name
@@ -936,20 +975,21 @@ local function SetupEntityESP(entity, name, color)
         Library:Notify({Title = name .. " DETECTED", Description = "Entity approaching - hide!", Time = 5})
     end
     
-    if not Settings.EntityESP then return end
-    
+    -- Create ESP elements (always track, but only show if EntityESP enabled)
     local highlight = Instance.new("Highlight")
     highlight.Parent = entity
     highlight.FillColor = color
     highlight.OutlineColor = color
     highlight.FillTransparency = 0
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Enabled = Settings.EntityESP
     
     local billboard = Instance.new("BillboardGui")
     billboard.Parent = entity
     billboard.Size = UDim2.new(0, 200, 0, 50)
     billboard.StudsOffset = Vector3.new(0, 5, 0)
     billboard.AlwaysOnTop = true
+    billboard.Enabled = Settings.EntityESP
     
     local label = Instance.new("TextLabel")
     label.Parent = billboard
@@ -964,6 +1004,10 @@ local function SetupEntityESP(entity, name, color)
     task.spawn(function()
         while entity and entity.Parent do
             pcall(function()
+                -- Update visibility based on current setting
+                highlight.Enabled = Settings.EntityESP
+                billboard.Enabled = Settings.EntityESP
+                
                 local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
                     local pos = entity:IsA("Model") and entity:GetPivot().Position or entity.Position
@@ -1047,14 +1091,47 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Fullbright loop
+-- Fullbright system (store originals and apply once, not every frame)
 local Lighting = game:GetService("Lighting")
-RunService.Heartbeat:Connect(function()
+local OriginalLighting = {
+    Ambient = Lighting.Ambient,
+    Brightness = Lighting.Brightness,
+    FogEnd = Lighting.FogEnd,
+    GlobalShadows = Lighting.GlobalShadows,
+    OutdoorAmbient = Lighting.OutdoorAmbient
+}
+
+ApplyFullbright = function()
     if Settings.Fullbright then
         Lighting.Ambient = Color3.new(1, 1, 1)
+        Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
         Lighting.Brightness = Settings.Brightness
         Lighting.FogEnd = 100000
         Lighting.GlobalShadows = false
+    end
+end
+
+RestoreLighting = function()
+    Lighting.Ambient = OriginalLighting.Ambient
+    Lighting.OutdoorAmbient = OriginalLighting.OutdoorAmbient
+    Lighting.Brightness = OriginalLighting.Brightness
+    Lighting.FogEnd = OriginalLighting.FogEnd
+    Lighting.GlobalShadows = OriginalLighting.GlobalShadows
+end
+
+-- Only re-apply when game tries to change lighting (not every frame)
+local lastFullbrightApply = 0
+Lighting:GetPropertyChangedSignal("Brightness"):Connect(function()
+    if Settings.Fullbright and tick() - lastFullbrightApply > 0.1 then
+        lastFullbrightApply = tick()
+        task.defer(ApplyFullbright)
+    end
+end)
+
+Lighting:GetPropertyChangedSignal("Ambient"):Connect(function()
+    if Settings.Fullbright and tick() - lastFullbrightApply > 0.1 then
+        lastFullbrightApply = tick()
+        task.defer(ApplyFullbright)
     end
 end)
 
