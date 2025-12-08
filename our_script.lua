@@ -984,8 +984,14 @@ local function CreateHighlight(part, fillColor, outlineColor, fillTrans, outline
     return highlight
 end
 
--- Helper function to create billboards
+-- Helper function to create billboards (FIXED: prevent duplicates)
 local function CreateBillboard(parent, text, textColor, yOffset, espType)
+    -- Check if parent already has an ESPBillboard - prevent duplicates
+    local existingBillboard = parent:FindFirstChild("ESPBillboard")
+    if existingBillboard then
+        return existingBillboard -- Return existing instead of creating duplicate
+    end
+    
     local billboard = Instance.new("BillboardGui")
     billboard.Parent = parent
     billboard.AlwaysOnTop = true
@@ -1018,7 +1024,7 @@ local function CreateBillboard(parent, text, textColor, yOffset, espType)
     return billboard
 end
 
--- Door ESP Function
+-- Door ESP Function (FIXED: removed duplicate doorPart declaration)
 local function ApplyDoorESP(room)
     local roomNumber = tonumber(room.Name)
     if not roomNumber then return end
@@ -1031,9 +1037,12 @@ local function ApplyDoorESP(room)
     -- Skip if door is already opened
     if openedDoors[door] then return end
     
-    -- Skip if already has ESP (check the door model, not just the parent)
+    -- Find the actual door part
     local doorPart = door:FindFirstChild("Door")
-    if doorPart and doorPart:FindFirstChildOfClass("Highlight") then return end
+    if not doorPart then return end
+    
+    -- Skip if already has ESP
+    if doorPart:FindFirstChildOfClass("Highlight") or door:FindFirstChild("ESPBillboard") then return end
     
     -- Check if locked by looking for KeyObtain in the room
     local key = room:FindFirstChild("KeyObtain", true)
@@ -1042,12 +1051,9 @@ local function ApplyDoorESP(room)
     -- Colors
     local outlineColor = isLocked and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(0, 200, 0)
     
-    -- Apply highlight to the door MeshPart (Door.Door)
-    local doorPart = door:FindFirstChild("Door")
-    if doorPart then
-        if doorPart:IsA("MeshPart") or (doorPart:IsA("BasePart") and doorPart.Transparency < 1) then
-            CreateHighlight(doorPart, Settings.DoorESPColor or Color3.fromRGB(255, 255, 0), outlineColor, 0.4, 0, "Doors")
-        end
+    -- Apply highlight to the door MeshPart
+    if doorPart:IsA("MeshPart") or (doorPart:IsA("BasePart") and doorPart.Transparency < 1) then
+        CreateHighlight(doorPart, Settings.DoorESPColor or Color3.fromRGB(255, 255, 0), outlineColor, 0.4, 0, "Doors")
     end
     
     -- Create billboard (add +1 to match in-game door numbers)
@@ -1301,11 +1307,18 @@ CurrentRooms.ChildAdded:Connect(function(room)
             warn(string.format("Key spawned in room %s", room.Name))
         end
         
-        -- Wardrobe detection (check if parent is Assets)
-        if descendant.Name == "Wardrobe" and descendant.Parent and descendant.Parent.Name == "Assets" and Settings.ClosetESP then
-            if not descendant:FindFirstChild("ESPBillboard") then
+        -- Wardrobe detection (check Assets or direct room child)
+        if descendant.Name == "Wardrobe" and Settings.ClosetESP and not descendant:FindFirstChild("ESPBillboard") then
+            local parent = descendant.Parent
+            -- Check if parent is Assets OR if it's a direct child of the room
+            if (parent and parent.Name == "Assets") or (parent and parent.Parent == CurrentRooms) then
                 ApplyItemESP(descendant, "🚪 WARDROBE", Settings.ClosetESPColor, "Closets")
             end
+        end
+        
+        -- LibraryHintPaper detection
+        if descendant.Name == "LibraryHintPaper" and Settings.ObjectiveESP and not descendant:FindFirstChild("ESPBillboard") then
+            ApplyItemESP(descendant, "📄 LIBRARY HINT", Settings.ObjectiveESPColor, "Objectives")
         end
         
         -- Item detection (FIXED: prevent furniture children from being detected)
@@ -1369,11 +1382,18 @@ local function ScanRoomForItems(room)
             ApplyKeyESP(descendant)
         end
         
-        -- Wardrobe detection (check if parent is Assets)
-        if descendant.Name == "Wardrobe" and descendant.Parent and descendant.Parent.Name == "Assets" and Settings.ClosetESP then
-            if not descendant:FindFirstChild("ESPBillboard") then
+        -- Wardrobe detection (check Assets or direct room child)
+        if descendant.Name == "Wardrobe" and Settings.ClosetESP and not descendant:FindFirstChild("ESPBillboard") then
+            local parent = descendant.Parent
+            -- Check if parent is Assets OR if it's a direct child of the room
+            if (parent and parent.Name == "Assets") or (parent and parent.Parent == CurrentRooms) then
                 ApplyItemESP(descendant, "🚪 WARDROBE", Settings.ClosetESPColor, "Closets")
             end
+        end
+        
+        -- LibraryHintPaper detection
+        if descendant.Name == "LibraryHintPaper" and Settings.ObjectiveESP and not descendant:FindFirstChild("ESPBillboard") then
+            ApplyItemESP(descendant, "📄 LIBRARY HINT", Settings.ObjectiveESPColor, "Objectives")
         end
         
         -- Item detection (FIXED: prevent furniture children from being detected)
@@ -1527,18 +1547,20 @@ local ESPFolder = Instance.new("Folder")
 ESPFolder.Name = "EntityESP"
 ESPFolder.Parent = Workspace
 
--- Rush detection and ESP (FIXED)
+-- Rush detection and ESP (FIXED: removed duplicate notifications)
 local function setupRushDetection()
     local function checkForRush()
         local RushModel = Workspace:FindFirstChild("RushMoving")
         if RushModel and not RushModel:GetAttribute("ESPAdded") then
             local rushColor = Color3.fromRGB(255, 25, 25)
             task.spawn(function()
-                if Settings.EntityNotify then
-                    Library:Notify({Title = "⚠️ RUSH DETECTED", Description = "HIDE IMMEDIATELY!", Time = 5})
-                end
                 warn("⚠️ RUSH SPAWNED!")
                 RushModel:SetAttribute("ESPAdded", true)
+                
+                -- ONLY notify here, not in ChildAdded
+                if Settings.EntityNotify then
+                    Library:Notify({Title = "⚠️ RUSH DETECTED", Description = "Hide in closet immediately!", Time = 5})
+                end
                 
                 if not Settings.EntityESP then return end
                 
@@ -1592,25 +1614,23 @@ local function setupRushDetection()
     
     RunService.Heartbeat:Connect(checkForRush)
     
-    Workspace.ChildAdded:Connect(function(child)
-        if child.Name == "RushMoving" and Settings.EntityNotify then
-            Library:Notify({Title = "⚠️ RUSH INCOMING", Description = "Get in a closet NOW!", Time = 5})
-        end
-    end)
+    -- Removed duplicate ChildAdded notification - it's handled in checkForRush()
 end
 
--- Ambush detection and ESP (FIXED)
+-- Ambush detection and ESP (FIXED: removed duplicate notifications)
 local function setupAmbushDetection()
     local function checkForAmbush()
         local AmbushModel = Workspace:FindFirstChild("AmbushMoving")
         if AmbushModel and not AmbushModel:GetAttribute("ESPAdded") then
             local ambushColor = Color3.fromRGB(255, 100, 0)
             task.spawn(function()
-                if Settings.EntityNotify then
-                    Library:Notify({Title = "⚠️ AMBUSH DETECTED", Description = "HIDE AND STAY IN CLOSET!", Time = 5})
-                end
                 warn("⚠️ AMBUSH SPAWNED!")
                 AmbushModel:SetAttribute("ESPAdded", true)
+                
+                -- ONLY notify here, not in ChildAdded
+                if Settings.EntityNotify then
+                    Library:Notify({Title = "⚠️ AMBUSH DETECTED", Description = "Stay in closet - multiple rebounds!", Time = 5})
+                end
                 
                 if not Settings.EntityESP then return end
                 
@@ -1664,58 +1684,39 @@ local function setupAmbushDetection()
     
     RunService.Heartbeat:Connect(checkForAmbush)
     
-    Workspace.ChildAdded:Connect(function(child)
-        if child.Name == "AmbushMoving" and Settings.EntityNotify then
-            Library:Notify({Title = "⚠️ AMBUSH INCOMING", Description = "Multiple rebounds - stay hidden!", Time = 5})
-        end
-    end)
+    -- Removed duplicate ChildAdded notification - it's handled in checkForAmbush()
 end
 
--- Eyes detection and damage prevention (FIXED)
+-- Eyes detection and damage prevention (ULTRA AGGRESSIVE)
 local function setupEyesDetection()
-    -- Anti-Eyes damage (improved method)
+    -- Anti-Eyes damage (destroy immediately and completely)
     local function preventEyesDamage()
         local eyes = Workspace:FindFirstChild("Eyes")
         if eyes then
-            -- Method 1: Delete all scripts
-            for _, v in pairs(eyes:GetDescendants()) do
-                if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("ModuleScript") then
-                    v:Destroy()
-                end
+            -- INSTANTLY destroy the entire model
+            eyes:Destroy()
+            warn("👁️ Eyes entity INSTANTLY DESTROYED!")
+            if Settings.EntityNotify then
+                Library:Notify({Title = "👁️ EYES DELETED", Description = "Eyes completely destroyed - no damage!", Time = 3})
             end
-            
-            -- Method 2: Delete damage parts
-            local eyesParts = {"Core", "Main", "DamagePart", "Hitbox"}
-            for _, partName in pairs(eyesParts) do
-                local part = eyes:FindFirstChild(partName, true)
-                if part then
-                    part:Destroy()
-                end
-            end
-            
-            -- Method 3: Destroy entire Eyes model after a moment
-            task.delay(0.5, function()
-                if eyes and eyes.Parent then
-                    eyes:Destroy()
-                    warn("Eyes entity completely removed!")
-                    if Settings.EntityNotify then
-                        Library:Notify({Title = "👁️ EYES DELETED", Description = "Eyes entity completely removed - you're safe!", Time = 3})
-                    end
-                end
-            end)
         end
     end
     
-    -- Continuous monitoring with faster response
+    -- Ultra-fast monitoring (every frame)
     RunService.Heartbeat:Connect(function()
-        preventEyesDamage()
+        if Settings.ScreechProtection then -- Use ScreechProtection toggle for Eyes too
+            preventEyesDamage()
+        end
     end)
     
-    -- Also monitor for Eyes spawn
+    -- Instant detection on spawn
     Workspace.ChildAdded:Connect(function(child)
         if child.Name == "Eyes" then
-            task.wait(0.1)
-            preventEyesDamage()
+            child:Destroy()
+            warn("👁️ Eyes spawn blocked!")
+            if Settings.EntityNotify then
+                Library:Notify({Title = "👁️ EYES BLOCKED", Description = "Eyes spawn prevented!", Time = 3})
+            end
         end
     end)
     
@@ -1785,14 +1786,7 @@ local function setupEyesDetection()
     
     RunService.Heartbeat:Connect(checkForEyes)
     
-    Workspace.ChildAdded:Connect(function(child)
-        if child.Name == "Eyes" then
-            preventEyesDamage()
-            if Settings.EntityNotify then
-                Library:Notify({Title = "👁️ EYES DETECTED", Description = "Eyes entity removed - no damage!", Time = 4})
-            end
-        end
-    end)
+    -- Removed duplicate Eyes handling - it's in preventEyesDamage() loop
 end
 
 -- Screech detection and deletion (Improved)
