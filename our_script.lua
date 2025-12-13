@@ -228,65 +228,46 @@ local function ApplyDoorESP(room)
 
     local door = room:FindFirstChild("Door")
     if not door then return end
-    if OpenedDoors[door] and OpenedDoors[door].opened then return end
+    if OpenedDoors[door] and (OpenedDoors[door].opened or HasESP(OpenedDoors[door].espTarget)) then return end
 
     local hasKey = room:FindFirstChild("KeyObtain", true) ~= nil
     local displayNum = roomNum + 1
     local text = string.format("DOOR %d\n%s", displayNum, hasKey and "LOCKED" or "OPEN")
 
-    -- FIX: Enhanced door detection for multiple door types and updates
-    local doorTargets = {} -- Store multiple targets for better coverage
-
-    -- Method 1: Try to find the main "Door" part
-    local doorPart = door:FindFirstChild("Door")
-    if doorPart and doorPart:IsA("BasePart") and doorPart.Transparency < 1 then
-        table.insert(doorTargets, doorPart)
-    end
-
-    -- Method 2: Find parts with door-like names
-    local doorNames = {"Door", "DoorLeaf", "DoorMain", "DoorSurface", "DoorMesh", "DoorPart"}
-    for _, name in pairs(doorNames) do
-        local parts = door:GetDescendants()
-        for _, part in pairs(parts) do
-            if part:IsA("BasePart") and part.Name:find(name) and part.Transparency < 1 then
-                table.insert(doorTargets, part)
-            end
-        end
-    end
-
-    -- Method 3: Find all substantial visible parts (not too small)
-    if #doorTargets == 0 then
-        for _, part in pairs(door:GetDescendants()) do
-            if part:IsA("BasePart") and part.Transparency < 1 then
-                local partSize = part.Size.X * part.Size.Y * part.Size.Z
-                -- Only include parts that are reasonably sized (avoid tiny hardware)
-                if partSize > 0.1 then
-                    table.insert(doorTargets, part)
+    -- SIMPLIFIED FIX: Target only the main door model for consistent ESP
+    -- Method 1: Try to find the main door part that's actually the door surface
+    local doorTarget = door:FindFirstChild("Door")
+    if doorTarget and doorTarget:IsA("BasePart") then
+        ApplyESP(doorTarget, text, Settings.DoorESPColor, "Door", room.Name)
+        OpenedDoors[door] = {opened = false, espTarget = doorTarget}
+    else
+        -- Method 2: Use PrimaryPart if it exists
+        if door.PrimaryPart and door.PrimaryPart:IsA("BasePart") then
+            ApplyESP(door.PrimaryPart, text, Settings.DoorESPColor, "Door", room.Name)
+            OpenedDoors[door] = {opened = false, espTarget = door.PrimaryPart}
+        else
+            -- Method 3: Find the largest visible part (simple and reliable)
+            local largestPart = nil
+            local largestSize = 0
+            for _, part in pairs(door:GetChildren()) do
+                if part:IsA("BasePart") then
+                    local partSize = part.Size.X * part.Size.Y * part.Size.Z
+                    if partSize > largestSize then
+                        largestSize = partSize
+                        largestPart = part
+                    end
                 end
             end
+
+            if largestPart then
+                ApplyESP(largestPart, text, Settings.DoorESPColor, "Door", room.Name)
+                OpenedDoors[door] = {opened = false, espTarget = largestPart}
+            else
+                -- Last resort: Apply to the door model itself
+                ApplyESP(door, text, Settings.DoorESPColor, "Door", room.Name)
+                OpenedDoors[door] = {opened = false, espTarget = door}
+            end
         end
-    end
-
-    -- Method 4: Fallback to entire door model if no parts found
-    if #doorTargets == 0 then
-        table.insert(doorTargets, door)
-    end
-
-    -- Apply ESP to all valid targets found
-    local appliedTargets = {}
-    for _, target in pairs(doorTargets) do
-        if not HasESP(target) then
-            ApplyESP(target, text, Settings.DoorESPColor, "Door", room.Name)
-            table.insert(appliedTargets, target)
-        end
-    end
-
-    -- Store references for cleanup
-    if #appliedTargets > 0 then
-        OpenedDoors[door] = {
-            opened = false,
-            espTargets = appliedTargets
-        }
     end
 
     -- Monitor door opening
@@ -296,12 +277,10 @@ local function ApplyDoorESP(room)
             if Settings.DoorReach then desc.MaxActivationDistance = 20 end
 
             desc.Triggered:Connect(function()
-                if OpenedDoors[door] and OpenedDoors[door].espTargets then
-                    for _, target in pairs(OpenedDoors[door].espTargets) do
-                        ClearESP(target)
-                    end
+                if OpenedDoors[door] and OpenedDoors[door].espTarget then
+                    ClearESP(OpenedDoors[door].espTarget)
                 end
-                OpenedDoors[door] = {opened = true, espTargets = {}}
+                OpenedDoors[door] = {opened = true, espTarget = nil}
                 warn(string.format("Door %d opened - ESP cleared", displayNum))
             end)
         end
@@ -309,12 +288,10 @@ local function ApplyDoorESP(room)
 
     door:GetAttributeChangedSignal("Opened"):Connect(function()
         if door:GetAttribute("Opened") then
-            if OpenedDoors[door] and OpenedDoors[door].espTargets then
-                for _, target in pairs(OpenedDoors[door].espTargets) do
-                    ClearESP(target)
-                end
+            if OpenedDoors[door] and OpenedDoors[door].espTarget then
+                ClearESP(OpenedDoors[door].espTarget)
             end
-            OpenedDoors[door] = {opened = true, espTargets = {}}
+            OpenedDoors[door] = {opened = true, espTarget = nil}
         end
     end)
 end
