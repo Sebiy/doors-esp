@@ -228,46 +228,40 @@ local function ApplyDoorESP(room)
 
     local door = room:FindFirstChild("Door")
     if not door then return end
-    if OpenedDoors[door] and (OpenedDoors[door].opened or HasESP(OpenedDoors[door].espTarget)) then return end
+    if OpenedDoors[door] and OpenedDoors[door].opened then return end
 
     local hasKey = room:FindFirstChild("KeyObtain", true) ~= nil
     local displayNum = roomNum + 1
     local text = string.format("DOOR %d\n%s", displayNum, hasKey and "LOCKED" or "OPEN")
 
-    -- SIMPLIFIED FIX: Target only the main door model for consistent ESP
-    -- Method 1: Try to find the main door part that's actually the door surface
-    local doorTarget = door:FindFirstChild("Door")
-    if doorTarget and doorTarget:IsA("BasePart") then
-        ApplyESP(doorTarget, text, Settings.DoorESPColor, "Door", room.Name)
-        OpenedDoors[door] = {opened = false, espTarget = doorTarget}
-    else
-        -- Method 2: Use PrimaryPart if it exists
-        if door.PrimaryPart and door.PrimaryPart:IsA("BasePart") then
-            ApplyESP(door.PrimaryPart, text, Settings.DoorESPColor, "Door", room.Name)
-            OpenedDoors[door] = {opened = false, espTarget = door.PrimaryPart}
-        else
-            -- Method 3: Find the largest visible part (simple and reliable)
-            local largestPart = nil
-            local largestSize = 0
-            for _, part in pairs(door:GetChildren()) do
-                if part:IsA("BasePart") then
-                    local partSize = part.Size.X * part.Size.Y * part.Size.Z
-                    if partSize > largestSize then
-                        largestSize = partSize
-                        largestPart = part
-                    end
-                end
-            end
-
-            if largestPart then
-                ApplyESP(largestPart, text, Settings.DoorESPColor, "Door", room.Name)
-                OpenedDoors[door] = {opened = false, espTarget = largestPart}
-            else
-                -- Last resort: Apply to the door model itself
-                ApplyESP(door, text, Settings.DoorESPColor, "Door", room.Name)
-                OpenedDoors[door] = {opened = false, espTarget = door}
-            end
+    -- WORKING DOOR ESP METHOD - Highlight all visible door parts
+    -- Apply highlight only to visible door parts (not collision/hitboxes)
+    local doorTargets = {}
+    for _, part in pairs(door:GetDescendants()) do
+        if part:IsA("BasePart") and part.Transparency < 1 and
+           not part.Name:find("Collision") and
+           not part.Name:find("Hitbox") and
+           not part.Name:find("Trigger") and
+           not part.Name:find("Prompt") then
+            table.insert(doorTargets, part)
         end
+    end
+
+    -- Apply ESP to all valid door parts
+    local appliedTargets = {}
+    for _, target in pairs(doorTargets) do
+        if not HasESP(target) then
+            ApplyESP(target, text, Settings.DoorESPColor, "Door", room.Name)
+            table.insert(appliedTargets, target)
+        end
+    end
+
+    -- Store references for cleanup
+    if #appliedTargets > 0 then
+        OpenedDoors[door] = {
+            opened = false,
+            espTargets = appliedTargets
+        }
     end
 
     -- Monitor door opening
@@ -277,10 +271,12 @@ local function ApplyDoorESP(room)
             if Settings.DoorReach then desc.MaxActivationDistance = 20 end
 
             desc.Triggered:Connect(function()
-                if OpenedDoors[door] and OpenedDoors[door].espTarget then
-                    ClearESP(OpenedDoors[door].espTarget)
+                if OpenedDoors[door] and OpenedDoors[door].espTargets then
+                    for _, target in pairs(OpenedDoors[door].espTargets) do
+                        ClearESP(target)
+                    end
                 end
-                OpenedDoors[door] = {opened = true, espTarget = nil}
+                OpenedDoors[door] = {opened = true, espTargets = {}}
                 warn(string.format("Door %d opened - ESP cleared", displayNum))
             end)
         end
@@ -288,10 +284,12 @@ local function ApplyDoorESP(room)
 
     door:GetAttributeChangedSignal("Opened"):Connect(function()
         if door:GetAttribute("Opened") then
-            if OpenedDoors[door] and OpenedDoors[door].espTarget then
-                ClearESP(OpenedDoors[door].espTarget)
+            if OpenedDoors[door] and OpenedDoors[door].espTargets then
+                for _, target in pairs(OpenedDoors[door].espTargets) do
+                    ClearESP(target)
+                end
             end
-            OpenedDoors[door] = {opened = true, espTarget = nil}
+            OpenedDoors[door] = {opened = true, espTargets = {}}
         end
     end)
 end
@@ -1064,17 +1062,72 @@ RunService.Heartbeat:Connect(function()
     local ambush = Workspace:FindFirstChild("AmbushMoving")
     if ambush then SetupEntityESP(ambush, "AMBUSH", Color3.fromRGB(255, 100, 0)) end
     
-    -- Eyes (destroy if protection enabled)
+    -- Eyes (anti-damage system - keeps model visible but removes damage)
     local eyes = Workspace:FindFirstChild("Eyes")
     if eyes then
         if Settings.ScreechProtection then
-            pcall(function() eyes:Destroy() end)
+            -- Remove damage-causing parts but keep model visible
+            for _, part in pairs(eyes:GetDescendants()) do
+                if part:IsA("BasePart") and (
+                    part.Name:find("Damage") or
+                    part.Name:find("Hitbox") or
+                    part.Name:find("Trigger") or
+                    part.Name:find("Collision")
+                ) then
+                    pcall(function() part:Destroy() end)
+                end
+            end
+
+            -- Remove any damage scripts
+            for _, script in pairs(eyes:GetDescendants()) do
+                if script:IsA("Script") or script:IsA("LocalScript") then
+                    pcall(function() script:Destroy() end)
+                end
+            end
+
+            -- Continuously heal player while Eyes exists
             if LocalPlayer.Character then
                 local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
                 if hum then hum.Health = hum.MaxHealth end
             end
+
+            warn("👁️ Eyes damage removed - model kept visible!")
+            if Settings.EntityNotify then
+                Library:Notify({Title = "👁️ EYES NEUTRALIZED", Description = "Damage removed, model visible", Time = 3})
+            end
         else
             SetupEntityESP(eyes, "EYES", Color3.fromRGB(255, 255, 0))
+        end
+    end
+end)
+
+-- Eyes spawn detection (immediate anti-damage on spawn)
+Workspace.ChildAdded:Connect(function(child)
+    if child.Name == "Eyes" and Settings.ScreechProtection then
+        task.wait() -- Let it spawn
+        warn("👁️ Eyes spawn detected - removing damage!")
+
+        -- Remove damage parts immediately
+        for _, part in pairs(child:GetDescendants()) do
+            if part:IsA("BasePart") and (
+                part.Name:find("Damage") or
+                part.Name:find("Hitbox") or
+                part.Name:find("Trigger") or
+                part.Name:find("Collision")
+            ) then
+                pcall(function() part:Destroy() end)
+            end
+        end
+
+        -- Remove damage scripts
+        for _, script in pairs(child:GetDescendants()) do
+            if script:IsA("Script") or script:IsA("LocalScript") then
+                pcall(function() script:Destroy() end)
+            end
+        end
+
+        if Settings.EntityNotify then
+            Library:Notify({Title = "👁️ EYES SPAWN BLOCKED", Description = "Damage removed on spawn!", Time = 3})
         end
     end
 end)
