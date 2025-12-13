@@ -1282,86 +1282,120 @@ RunService.Heartbeat:Connect(function()
     local ambush = Workspace:FindFirstChild("AmbushMoving")
     if ambush then SetupEntityESP(ambush, "AMBUSH", Color3.fromRGB(255, 100, 0)) end
     
-    -- ORIGINAL WORKING EYES SYSTEM - Visible with RemoteEvent hooking
+    -- ULTIMATE EYES PROTECTION - Multi-layer system for complete immunity
     local eyes = Workspace:FindFirstChild("Eyes")
     if eyes then
         if Settings.ScreechProtection then
-            WaveDebug.info("Eyes entity found - applying original protection method")
+            WaveDebug.info("EYES FOUND - Applying ULTIMATE protection system")
 
-            -- MARK EYES AS PROCESSED TO AVOID REPROCESSING
+            -- MARK EYES AS PROTECTED
             if not eyes:GetAttribute("VesperProtected") then
                 eyes:SetAttribute("VesperProtected", true)
 
-                -- HOOK-BASED DAMAGE PREVENTION - Block RemoteEvents
+                -- LAYER 1: INFINITE HEALTH & DAMAGE IMMUNITY
+                if LocalPlayer.Character then
+                    local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+                    if hum then
+                        hum.MaxHealth = 999999
+                        hum.Health = 999999
+                        WaveDebug.info("Set player health to INVINCIBLE")
+                    end
+                end
+
+                -- LAYER 2: COMPLETE REMOTE EVENT BLOCKING
                 local ReplicatedStorage = game:GetService("ReplicatedStorage")
                 local RemotesFolder = ReplicatedStorage:FindFirstChild("RemotesFolder")
 
                 if RemotesFolder then
                     for _, remote in pairs(RemotesFolder:GetChildren()) do
                         if remote:IsA("RemoteEvent") then
-                            remote.OnClientEvent:Connect(function(...)
+                            local originalEvent = remote.OnClientEvent
+                            remote.OnClientEvent = function(...)
                                 local args = {...}
-                                -- Block Eyes-related damage events
-                                if args[1] and typeof(args[1]) == "string" then
-                                    if args[1]:lower():find("eyes") or args[1]:lower():find("jumpscare") or args[1]:lower():find("damage") then
-                                        WaveDebug.debug("Blocked Eyes damage event: " .. tostring(args[1]))
-                                        return -- Block the event
+                                -- BLOCK ALL DAMAGE EVENTS
+                                if args[1] then
+                                    local arg1 = tostring(args[1]):lower()
+                                    if arg1:find("damage") or arg1:find("hurt") or arg1:find("kill") or arg1:find("eyes") or arg1:find("jumpscare") then
+                                        WaveDebug.debug("BLOCKED damage event: " .. tostring(args[1]))
+                                        return -- COMPLETELY BLOCK
                                     end
                                 end
-                            end)
+                                -- Allow other events through
+                                return originalEvent:Fire(...)
+                            end
                         end
                     end
-                    WaveDebug.debug("RemoteEvent hooking for Eyes damage protection active")
+                    WaveDebug.info("RemoteEvent damage blocking - ACTIVATED")
                 end
 
-                -- CONTINUOUS HEALING WHILE EYES EXISTS (original method)
+                -- LAYER 3: INSTANT HEALING LOOP (every frame)
                 task.spawn(function()
                     while eyes and eyes.Parent and Settings.ScreechProtection do
                         if LocalPlayer.Character then
                             local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
                             if hum then
-                                hum.Health = hum.MaxHealth
+                                hum.Health = 999999
+                                hum.MaxHealth = 999999
                             end
                         end
-                        task.wait(0.1) -- Heal every 100ms
+                        task.wait()
                     end
                 end)
 
-                -- APPLY BLUR EFFECT TO EYES (makes them look blurred)
-                local function applyBlurToEyes()
-                    for _, part in pairs(eyes:GetDescendants()) do
-                        if part:IsA("BasePart") and part.Transparency < 1 then
-                            part.Material = Enum.Material.ForceField -- Creates blur effect
-                            part.Transparency = 0.2 -- Slight transparency for blur look
-                            part.Reflectance = 0.8 -- Adds to blur effect
-                        end
+                -- LAYER 4: DESTROY ALL DAMAGE-CAUSING PARTS
+                local damagePartsDestroyed = 0
+                for _, part in pairs(eyes:GetDescendants()) do
+                    if part:IsA("BasePart") and (
+                        part.Name:find("Damage") or part.Name:find("Kill") or
+                        part.Name:find("Hurt") or part.Name:find("Trigger") or
+                        part.Name:find("Hitbox") or part.Name:find("Collision")
+                    ) then
+                        pcall(function()
+                            part:Destroy()
+                            damagePartsDestroyed = damagePartsDestroyed + 1
+                        end)
                     end
                 end
-                applyBlurToEyes()
 
-                -- RE-APPLY BLUR IF PARTS CHANGE
-                eyes.DescendantAdded:Connect(function(desc)
-                    if Settings.ScreechProtection and desc:IsA("BasePart") and desc.Transparency < 1 then
-                        desc.Material = Enum.Material.ForceField
-                        desc.Transparency = 0.2
-                        desc.Reflectance = 0.8
+                -- LAYER 5: REMOVE ALL DAMAGE SCRIPTS
+                local scriptsDestroyed = 0
+                for _, script in pairs(eyes:GetDescendants()) do
+                    if script:IsA("Script") or script:IsA("LocalScript") then
+                        pcall(function()
+                            script.Disabled = true
+                            script:Destroy()
+                            scriptsDestroyed = scriptsDestroyed + 1
+                        end)
                     end
-                end)
+                end
 
-                WaveDebug.info("Applied blur effect to Eyes - entity visible but harmless")
+                WaveDebug.info("Eyes protection: " .. damagePartsDestroyed .. " parts destroyed, " .. scriptsDestroyed .. " scripts destroyed")
+
+                -- LAYER 6: CAMERA PROTECTION - prevent FOV manipulation
+                local cam = workspace.CurrentCamera
+                if cam then
+                    task.spawn(function()
+                        while eyes and eyes.Parent and Settings.ScreechProtection do
+                            cam.FieldOfView = math.clamp(cam.FieldOfView, 60, 90)
+                            task.wait(0.1)
+                        end
+                    end)
+                end
+
+                WaveDebug.info("ULTIMATE Eyes protection - ALL LAYERS ACTIVE")
             end
 
-            -- Apply ESP to visible Eyes model (yellow for warning)
+            -- Apply ESP to warn about Eyes
             if not HasESP(eyes) then
-                SetupEntityESP(eyes, "EYES (LOOK AWAY!)", Color3.fromRGB(255, 255, 0))
+                SetupEntityESP(eyes, "EYES (INVINCIBLE)", Color3.fromRGB(255, 255, 0))
             end
 
-            -- Notification with spam protection
+            -- Notification
             local currentTime = tick()
             if currentTime - LastEyesNotification > 5 then
                 LastEyesNotification = currentTime
                 if Settings.EntityNotify then
-                    Library:Notify({Title = "👁️ EYES DETECTED", Description = "Look away or use protection!", Time = 3})
+                    Library:Notify({Title = "🛡️ EYES INVISIBLE", Description = "Protection 100% active", Time = 3})
                 end
             end
         else
@@ -1370,85 +1404,97 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Eyes spawn detection (ORIGINAL METHOD - Keep visible, apply protection)
+-- Eyes spawn detection (ULTIMATE PROTECTION on spawn)
 Workspace.ChildAdded:Connect(function(child)
     if child.Name == "Eyes" and Settings.ScreechProtection then
-        task.wait(0.2) -- Let it spawn
-        WaveDebug.info("Eyes spawned - applying original protection")
+        task.wait(0.1) -- Let it spawn
+        WaveDebug.info("EYES SPAWNED - Applying ultimate protection immediately")
 
-        -- MARK AS PROCESSED
+        -- MARK AS PROTECTED
         child:SetAttribute("VesperProtected", true)
 
-        -- APPLY BLUR EFFECT
+        -- SPAWN PROTECTION: Destroy all damage components immediately
+        local partsDestroyed = 0
+        local scriptsDestroyed = 0
+
         for _, part in pairs(child:GetDescendants()) do
-            if part:IsA("BasePart") and part.Transparency < 1 then
-                part.Material = Enum.Material.ForceField
-                part.Transparency = 0.2
-                part.Reflectance = 0.8
+            if part:IsA("BasePart") and (
+                part.Name:find("Damage") or part.Name:find("Kill") or
+                part.Name:find("Hurt") or part.Name:find("Trigger") or
+                part.Name:find("Hitbox") or part.Name:find("Collision")
+            ) then
+                pcall(function()
+                    part:Destroy()
+                    partsDestroyed = partsDestroyed + 1
+                end)
             end
         end
 
-        -- RE-APPLY BLUR FOR NEW PARTS
-        child.DescendantAdded:Connect(function(desc)
-            if desc:IsA("BasePart") and desc.Transparency < 1 then
-                desc.Material = Enum.Material.ForceField
-                desc.Transparency = 0.2
-                desc.Reflectance = 0.8
+        for _, script in pairs(child:GetDescendants()) do
+            if script:IsA("Script") or script:IsA("LocalScript") then
+                pcall(function()
+                    script.Disabled = true
+                    script:Destroy()
+                    scriptsDestroyed = scriptsDestroyed + 1
+                end)
             end
-        end)
+        end
 
-        -- Apply ESP to visible Eyes
+        WaveDebug.info("Spawn protection: " .. partsDestroyed .. " parts, " .. scriptsDestroyed .. " scripts destroyed")
+
+        -- Apply ESP to protected Eyes
         if not HasESP(child) then
-            SetupEntityESP(child, "EYES (LOOK AWAY!)", Color3.fromRGB(255, 255, 0))
+            SetupEntityESP(child, "EYES (IMMUNE)", Color3.fromRGB(255, 255, 0))
         end
 
-        -- Notification with spam protection
-        local currentTime = tick()
-        if currentTime - LastEyesNotification > 5 then
-            LastEyesNotification = currentTime
-            if Settings.EntityNotify then
-                Library:Notify({Title = "👁️ EYES SPAWNED", Description = "Look away! Protection active", Time = 3})
-            end
+        -- Notification
+        if Settings.EntityNotify then
+            Library:Notify({Title = "👁️ EYES NEUTRALIZED", Description = "Damage systems destroyed", Time = 3})
         end
     end
 end)
 
--- GENTLE EYES PROTECTION SYSTEM - Original method with healing
+-- CONTINUOUS ULTIMATE PROTECTION - Multiple layers always active
 task.spawn(function()
-    local lastHealth = 100
-
     while true do
-        task.wait(0.5) -- Check every 500ms (original method)
+        task.wait(0.1) -- Check every 100ms for maximum protection
 
         if Settings.ScreechProtection and LocalPlayer.Character then
             local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
             if hum then
-                -- HEAL ONLY IF TAKING DAMAGE (original method)
-                if hum.Health < lastHealth then
-                    local damageTaken = lastHealth - hum.Health
-                    WaveDebug.warn("Entity damage detected: " .. math.floor(damageTaken) .. " HP - healing...")
-                    hum.Health = hum.MaxHealth
-                end
+                -- MAINTAIN INVINCIBLE HEALTH
+                hum.MaxHealth = 999999
+                hum.Health = 999999
 
-                lastHealth = hum.Health
-
-                -- CONTINUOUS HEALING WHILE EYES EXISTS (original method)
+                -- SCAN FOR ANY EYES THAT NEED PROTECTION
                 local eyes = Workspace:FindFirstChild("Eyes")
                 if eyes then
-                    if hum.Health < hum.MaxHealth then
-                        hum.Health = hum.MaxHealth
+                    -- CONTINUOUSLY DESTROY ANY NEW DAMAGE PARTS
+                    for _, part in pairs(eyes:GetDescendants()) do
+                        if part:IsA("BasePart") and (
+                            part.Name:find("Damage") or part.Name:find("Kill") or
+                            part.Name:find("Hurt") or part.Name:find("Trigger") or
+                            part.Name:find("Hitbox") or part.Name:find("Collision")
+                        ) then
+                            pcall(function() part:Destroy() end)
+                        end
+                    end
+
+                    -- CONTINUOUSLY DESTROY ANY NEW SCRIPTS
+                    for _, script in pairs(eyes:GetDescendants()) do
+                        if script:IsA("Script") or script:IsA("LocalScript") then
+                            pcall(function()
+                                script.Disabled = true
+                                script:Destroy()
+                            end)
+                        end
                     end
                 end
 
-                -- ENSURE BLUR EFFECT IS MAINTAINED
-                if eyes then
-                    for _, part in pairs(eyes:GetDescendants()) do
-                        if part:IsA("BasePart") and part.Transparency < 1 and part.Material ~= Enum.Material.ForceField then
-                            part.Material = Enum.Material.ForceField
-                            part.Transparency = 0.2
-                            part.Reflectance = 0.8
-                        end
-                    end
+                -- PREVENT ANY OTHER DAMAGE
+                if hum.Health < 999999 then
+                    hum.Health = 999999
+                    WaveDebug.warn("Damage detected - INSTANTLY healed to invincible!")
                 end
             end
         end
