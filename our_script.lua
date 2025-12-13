@@ -17,22 +17,63 @@ local CurrentRooms = Workspace:WaitForChild("CurrentRooms")
 -- Initialize Wave Executor debug output
 local WaveDebug = {}
 local function setupWaveDebug()
-    if wave and wave.console then
-        -- Enable console redirection
-        wave.console.redirect(true)
-        wave.console.timestamp(true)
+    -- Test multiple Wave API methods
+    local waveAvailable = false
 
-        WaveDebug = {
-            print = function(msg) wave.print("[VESPER] " .. tostring(msg)) end,
-            debug = function(msg) wave.debug("[VESPER-DEBUG] " .. tostring(msg)) end,
-            info = function(msg) wave.log.info("[VESPER-INFO] " .. tostring(msg)) end,
-            warn = function(msg) wave.log.warn("[VESPER-WARN] " .. tostring(msg)) end,
-            error = function(msg) wave.log.error("[VESPER-ERROR] " .. tostring(msg)) end
-        }
-        WaveDebug.info("Wave Executor debug system initialized!")
-        return true
+    -- Method 1: Check for wave global
+    if wave then
+        waveAvailable = true
+        WaveDebug.print = function(msg)
+            if wave.print then
+                wave.print("[VESPER] " .. tostring(msg))
+            else
+                print("[VESPER] " .. tostring(msg))
+            end
+        end
+
+        WaveDebug.debug = function(msg)
+            if wave.debug then
+                wave.debug("[VESPER-DEBUG] " .. tostring(msg))
+            else
+                print("[VESPER-DEBUG] " .. tostring(msg))
+            end
+        end
+
+        WaveDebug.info = function(msg)
+            if wave.log and wave.log.info then
+                wave.log.info("[VESPER-INFO] " .. tostring(msg))
+            else
+                print("[VESPER-INFO] " .. tostring(msg))
+            end
+        end
+
+        WaveDebug.warn = function(msg)
+            if wave.log and wave.log.warn then
+                wave.log.warn("[VESPER-WARN] " .. tostring(msg))
+            else
+                warn("[VESPER-WARN] " .. tostring(msg))
+            end
+        end
+
+        WaveDebug.error = function(msg)
+            if wave.log and wave.log.error then
+                wave.log.error("[VESPER-ERROR] " .. tostring(msg))
+            else
+                warn("[VESPER-ERROR] " .. tostring(msg))
+            end
+        end
+
+        -- Try to enable console redirection
+        if wave.console then
+            pcall(function() wave.console.redirect(true) end)
+            pcall(function() wave.console.timestamp(true) end)
+        end
+
+        WaveDebug.info("Wave Executor debug system initialized! API detected.")
+
     else
-        -- Fallback to standard print if Wave not available
+        -- Fallback to standard print
+        waveAvailable = false
         WaveDebug = {
             print = function(msg) print("[VESPER] " .. tostring(msg)) end,
             debug = function(msg) print("[VESPER-DEBUG] " .. tostring(msg)) end,
@@ -40,8 +81,10 @@ local function setupWaveDebug()
             warn = function(msg) warn("[VESPER-WARN] " .. tostring(msg)) end,
             error = function(msg) warn("[VESPER-ERROR] " .. tostring(msg)) end
         }
-        return false
+        WaveDebug.info("Wave Executor API not found - using fallback debug system")
     end
+
+    return waveAvailable
 end
 
 setupWaveDebug()
@@ -264,6 +307,20 @@ local function updateRainbowESP()
         if RainbowConnection then
             RainbowConnection:Disconnect()
             RainbowConnection = nil
+
+            -- RESTORE ORIGINAL COLORS when rainbow is disabled
+            WaveDebug.info("Restoring original ESP colors...")
+            for instance, data in pairs(ESPRegistry) do
+                if data.highlight then
+                    data.highlight.FillColor = data.color
+                    data.highlight.OutlineColor = Color3.new(data.color.R * 0.7, data.color.G * 0.7, data.color.B * 0.7)
+                end
+                if data.billboard then
+                    local label = data.billboard:FindFirstChild("ESPLabel")
+                    if label then label.TextColor3 = data.color end
+                end
+            end
+            WaveDebug.info("Original ESP colors restored!")
         end
         return
     end
@@ -330,65 +387,60 @@ local function ApplyDoorESP(room)
     local displayNum = roomNum + 1
     local text = string.format("DOOR %d\n%s", displayNum, hasKey and "LOCKED" or "OPEN")
 
-    -- TARGETED DOOR ESP METHOD - Find specific visible door parts only
+    -- AGGRESSIVE DOOR ESP METHOD - Always find a target
     local doorTarget = nil
+    local methodUsed = "none"
 
-    -- Method 1: Look for the main door leaf/surface
+    -- Method 1: Main door part
     local doorPart = door:FindFirstChild("Door")
-    if doorPart and doorPart:IsA("BasePart") and doorPart.Transparency < 1 then
+    if doorPart and doorPart:IsA("BasePart") then
         doorTarget = doorPart
-        WaveDebug.debug("Found main Door part for room " .. room.Name)
+        methodUsed = "main Door part"
     end
 
-    -- Method 2: Look for door leaf/surface with different names
+    -- Method 2: Door leaf/surface with different names
     if not doorTarget then
-        local doorNames = {"DoorLeaf", "DoorSurface", "DoorMain", "DoorFrame"}
+        local doorNames = {"DoorLeaf", "DoorSurface", "DoorMain", "DoorFrame", "DoorMesh"}
         for _, name in pairs(doorNames) do
             local part = door:FindFirstChild(name)
-            if part and part:IsA("BasePart") and part.Transparency < 1 then
+            if part and part:IsA("BasePart") then
                 doorTarget = part
-                WaveDebug.debug("Found door part '" .. name .. "' for room " .. room.Name)
+                methodUsed = name
                 break
             end
         end
     end
 
-    -- Method 3: Find largest non-collision part
+    -- Method 3: ANY visible part inside door (aggressive)
     if not doorTarget then
-        local largestPart = nil
-        local largestSize = 0
         for _, part in pairs(door:GetDescendants()) do
-            if part:IsA("BasePart") and part.Transparency < 1 and
-               not part.Name:find("Collision") and
-               not part.Name:find("Hitbox") and
-               not part.Name:find("Trigger") and
-               not part.Name:find("Prompt") then
-                local partSize = part.Size.X * part.Size.Y * part.Size.Z
-                if partSize > largestSize then
-                    largestSize = partSize
-                    largestPart = part
-                end
+            if part:IsA("BasePart") and part.Transparency < 0.8 then -- More permissive
+                doorTarget = part
+                methodUsed = "any visible part"
+                break
             end
         end
-        doorTarget = largestPart
-        if doorTarget then
-            WaveDebug.debug("Found largest door part for room " .. room.Name)
-        end
     end
 
-    -- Method 4: Fallback to door PrimaryPart
+    -- Method 4: Primary part
     if not doorTarget and door.PrimaryPart then
         doorTarget = door.PrimaryPart
-        WaveDebug.debug("Using PrimaryPart for door in room " .. room.Name)
+        methodUsed = "PrimaryPart"
     end
 
-    -- Apply ESP to the specific target found
+    -- Method 5: Fallback to entire door model (last resort)
+    if not doorTarget then
+        doorTarget = door
+        methodUsed = "entire door model"
+    end
+
+    -- ALWAYS apply ESP if we found a target
     if doorTarget and not HasESP(doorTarget) then
         ApplyESP(doorTarget, text, Settings.DoorESPColor, "Door", room.Name)
         OpenedDoors[door] = {opened = false, espTarget = doorTarget}
-        WaveDebug.info("Applied door ESP to room " .. room.Name .. " - Target: " .. doorTarget.Name)
+        WaveDebug.info("DOOR ESP APPLIED to room " .. room.Name .. " - Method: " .. methodUsed .. " - Target: " .. doorTarget.Name)
     else
-        WaveDebug.warn("Failed to find suitable ESP target for door in room " .. room.Name)
+        WaveDebug.error("NO TARGET FOUND for door in room " .. room.Name)
     end
 
     -- Monitor door opening
@@ -1109,11 +1161,51 @@ CurrentRooms.DescendantAdded:Connect(function(desc)
     end
 end)
 
--- Initial scan after delay
+-- Initial scan after delay + continuous door check
 task.spawn(function()
     task.wait(1.5)
     ScanAllRooms()
-    warn("Initial room scan complete!")
+    WaveDebug.info("Initial room scan complete!")
+
+    -- CONTINUOUS DOOR ESP CHECK - catch any missed doors
+    while true do
+        task.wait(2) -- Check every 2 seconds
+
+        if Settings.DoorESP then
+            local doorsChecked = 0
+            local doorsFound = 0
+
+            for _, room in pairs(CurrentRooms:GetChildren()) do
+                if room:IsA("Model") then
+                    doorsChecked = doorsChecked + 1
+
+                    local door = room:FindFirstChild("Door")
+                    if door then
+                        doorsFound = doorsFound + 1
+
+                        -- Check if this door already has ESP
+                        local hasESP = false
+                        for instance, data in pairs(ESPRegistry) do
+                            if data.espType == "Door" and instance:IsDescendantOf(door) then
+                                hasESP = true
+                                break
+                            end
+                        end
+
+                        -- Apply ESP if missing
+                        if not hasESP then
+                            WaveDebug.info("Found door without ESP in room " .. room.Name .. " - applying now")
+                            ApplyDoorESP(room)
+                        end
+                    end
+                end
+            end
+
+            if doorsChecked > 0 then
+                WaveDebug.debug("Door ESP check: " .. doorsFound .. "/" .. doorsChecked .. " doors have ESP")
+            end
+        end
+    end
 end)
 
 -- ═══════════════════════════════════════════════════════════
@@ -1298,54 +1390,70 @@ Workspace.ChildAdded:Connect(function(child)
     end
 end)
 
--- ENTITY DAMAGE HEALING SYSTEM - Heals from all entity damage
+-- MAXIMUM EYES PROTECTION SYSTEM - Multiple layers of protection
 task.spawn(function()
     local lastHealth = 100
-    local damageTaken = 0
+    local eyesDestroyed = 0
 
     while true do
-        task.wait(0.3) -- Check every 0.3 seconds for quick healing
+        task.wait(0.1) -- Check every 100ms for maximum protection
 
         if Settings.ScreechProtection and LocalPlayer.Character then
             local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
             if hum then
-                -- Track damage taken
-                if hum.Health < lastHealth then
-                    damageTaken = damageTaken + (lastHealth - hum.Health)
-                    WaveDebug.warn("Entity damage detected! Healing " .. math.floor(lastHealth - hum.Health) .. " HP")
-                end
-
-                lastHealth = hum.Health
-
-                -- Heal to max health (useful for all entity damage)
+                -- INSTANT HEALING - set health to max every frame
                 if hum.Health < hum.MaxHealth then
-                    local healAmount = hum.MaxHealth - hum.Health
+                    local oldHealth = hum.Health
                     hum.Health = hum.MaxHealth
 
-                    if healAmount > 1 then
-                        WaveDebug.info("Healed " .. math.floor(healAmount) .. " HP from entity damage")
-                    end
-                end
-            end
-
-            -- Double-check for any remaining Eyes damage parts
-            local eyes = Workspace:FindFirstChild("Eyes")
-            if eyes then
-                local foundDamageParts = false
-                for _, part in pairs(eyes:GetDescendants()) do
-                    if part:IsA("BasePart") and (
-                        part.Name:find("Damage") or
-                        part.Name:find("Hitbox") or
-                        part.Name:find("Trigger") or
-                        part.Name:find("Hurt")
-                    ) then
-                        pcall(function() part:Destroy() end)
-                        foundDamageParts = true
+                    -- Log if significant healing occurred
+                    if hum.MaxHealth - oldHealth > 0.1 then
+                        WaveDebug.warn("INSTANT HEAL: Restored " .. math.floor(hum.MaxHealth - oldHealth) .. " HP")
                     end
                 end
 
-                if foundDamageParts then
-                    WaveDebug.debug("Found and removed additional Eyes damage parts")
+                -- INCREASE MAX HEALTH TO PREVENT DEATH
+                if hum.MaxHealth < 1000 then
+                    hum.MaxHealth = 1000
+                    WaveDebug.info("Increased max health to 1000 for protection")
+                end
+
+                -- AGGRESSIVE EYES DESTRUCTION
+                local eyes = Workspace:FindFirstChild("Eyes")
+                if eyes then
+                    eyesDestroyed = eyesDestroyed + 1
+
+                    -- DESTROY EVERYTHING INSIDE EYES (complete neutralization)
+                    for _, child in pairs(eyes:GetChildren()) do
+                        pcall(function() child:Destroy() end)
+                    end
+
+                    -- DESTROY ALL DESCENDANTS
+                    for _, desc in pairs(eyes:GetDescendants()) do
+                        pcall(function() desc:Destroy() end)
+                    end
+
+                    -- DESTROY THE EYES MODEL ITSELF
+                    pcall(function() eyes:Destroy() end)
+
+                    if eyesDestroyed % 10 == 1 then -- Log every 10th destruction to prevent spam
+                        WaveDebug.info("EYES DESTROYED - Total: " .. eyesDestroyed)
+                    end
+                end
+
+                -- SCAN FOR ANY OTHER EYES-LIKE ENTITIES
+                for _, obj in pairs(Workspace:GetChildren()) do
+                    if obj.Name:find("Eye") or obj.Name:find("Gaze") then
+                        pcall(function() obj:Destroy() end)
+                        WaveDebug.debug("Destroyed Eye-like entity: " .. obj.Name)
+                    end
+                end
+
+                -- PREVENT CAMERA DAMAGE
+                local cam = workspace.CurrentCamera
+                if cam then
+                    -- Force camera normal
+                    cam.FieldOfView = math.clamp(cam.FieldOfView, 60, 90)
                 end
             end
         end
