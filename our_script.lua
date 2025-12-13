@@ -113,26 +113,25 @@ end
 local function ApplyESP(instance, text, color, espType, roomName)
     if HasESP(instance) then return end
     
+    -- Extra check: skip if already has billboard (prevents duplicates)
+    if instance:FindFirstChild("ESPBillboard") then return end
+    
     local highlight, billboard
     
-    -- Create highlight on specific part only (not whole model)
-    local targetPart = instance
+    -- Create highlight - parent to MODEL/instance so it highlights all parts
     if instance:IsA("Model") then
-        -- For doors, find the actual door mesh part
-        if espType == "Door" then
-            targetPart = instance:FindFirstChild("Door") -- The actual door part
-            if not targetPart then
-                targetPart = instance:FindFirstChildWhichIsA("MeshPart")
-            end
-        else
-            targetPart = instance.PrimaryPart or instance:FindFirstChildWhichIsA("BasePart")
-        end
-    end
-    
-    if targetPart and targetPart:IsA("BasePart") then
         highlight = Instance.new("Highlight")
-        highlight.Parent = targetPart -- Parent to specific part, not model
-        highlight.Adornee = targetPart -- Adorn to specific part only
+        highlight.Parent = instance
+        highlight.Adornee = instance -- Highlight entire model
+        highlight.FillColor = color
+        highlight.OutlineColor = Color3.new(color.R * 0.7, color.G * 0.7, color.B * 0.7)
+        highlight.FillTransparency = 0.4
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    elseif instance:IsA("BasePart") then
+        highlight = Instance.new("Highlight")
+        highlight.Parent = instance
+        highlight.Adornee = instance
         highlight.FillColor = color
         highlight.OutlineColor = Color3.new(color.R * 0.7, color.G * 0.7, color.B * 0.7)
         highlight.FillTransparency = 0.4
@@ -165,7 +164,7 @@ local function ApplyESP(instance, text, color, espType, roomName)
         billboard = billboard,
         espType = espType,
         color = color,
-        roomName = roomName
+        roomName = roomName or "unknown"
     }
     
     -- Auto-cleanup when destroyed
@@ -230,17 +229,14 @@ local function ApplyDoorESP(room)
     local door = room:FindFirstChild("Door")
     if not door then return end
     if OpenedDoors[door] then return end
-    
-    local doorPart = door:FindFirstChild("Door")
-    if not doorPart then return end
-    if HasESP(doorPart) then return end -- Check the door part, not model
+    if HasESP(door) then return end
     
     local hasKey = room:FindFirstChild("KeyObtain", true) ~= nil
     local displayNum = roomNum + 1
     local text = string.format("DOOR %d\n%s", displayNum, hasKey and "LOCKED" or "OPEN")
     
-    -- Apply ESP to the door PART specifically
-    ApplyESP(doorPart, text, Settings.DoorESPColor, "Door", room.Name)
+    -- Apply ESP to the door MODEL (highlights all parts inside)
+    ApplyESP(door, text, Settings.DoorESPColor, "Door", room.Name)
     
     -- Monitor door opening
     for _, desc in pairs(door:GetDescendants()) do
@@ -250,7 +246,7 @@ local function ApplyDoorESP(room)
             
             desc.Triggered:Connect(function()
                 OpenedDoors[door] = true
-                ClearESP(doorPart)
+                ClearESP(door)
                 warn(string.format("Door %d opened - ESP cleared", displayNum))
             end)
         end
@@ -259,7 +255,7 @@ local function ApplyDoorESP(room)
     door:GetAttributeChangedSignal("Opened"):Connect(function()
         if door:GetAttribute("Opened") then
             OpenedDoors[door] = true
-            ClearESP(doorPart)
+            ClearESP(door)
         end
     end)
 end
@@ -1223,9 +1219,485 @@ LocalPlayer.CharacterAdded:Connect(function()
     if noclipConn then noclipConn:Disconnect() end
 end)
 
+-- ═══════════════════════════════════════════════════════════
+-- MOVEMENT SYSTEMS - All Missing Features Implemented
+-- ═══════════════════════════════════════════════════════════
+
+-- Get references to DOORS movement system if available
+local MainGame = LocalPlayer:FindFirstChild("PlayerScripts") and
+                 LocalPlayer.PlayerScripts:FindFirstChild("MainGame")
+
+-- Store original values
+local OriginalWalkSpeed = 16
+local OriginalJumpPower = 50
+local OriginalHipHeight = 0
+local SpeedBoostConnection = nil
+
+-- ═══════════════════════════════════════════════════════════
+-- SPEED BOOST SYSTEM
+-- ═══════════════════════════════════════════════════════════
+
+local function UpdateSpeedBoost()
+    if not LocalPlayer.Character then return end
+    local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+
+    if Settings.SpeedBoost then
+        local boostMultiplier = Settings.SpeedBypass and 2.5 or 1.8
+        local targetSpeed = OriginalWalkSpeed * boostMultiplier
+
+        if Settings.NoAcceleration then
+            humanoid.WalkSpeed = targetSpeed
+            humanoid.JumpPower = OriginalJumpPower * 1.5
+        else
+            -- Smooth speed transition
+            local currentSpeed = humanoid.WalkSpeed
+            local steps = 10
+            local increment = (targetSpeed - currentSpeed) / steps
+
+            for i = 1, steps do
+                humanoid.WalkSpeed = currentSpeed + (increment * i)
+                task.wait(0.05)
+            end
+        end
+    else
+        humanoid.WalkSpeed = OriginalWalkSpeed
+        humanoid.JumpPower = OriginalJumpPower
+    end
+end
+
+-- Update speed boost when character loads
+LocalPlayer.CharacterAdded:Connect(function(char)
+    char:WaitForChild("Humanoid")
+    task.wait(0.1)
+    OriginalWalkSpeed = char:WaitForChild("Humanoid").WalkSpeed
+    OriginalJumpPower = char:WaitForChild("Humanoid").JumpPower
+    UpdateSpeedBoost()
+end)
+
+-- ═══════════════════════════════════════════════════════════
+-- FLY SYSTEM
+-- ═══════════════════════════════════════════════════════════
+
+local FlyVelocity = nil
+local FlyEnabled = false
+local FlyConnections = {}
+
+local function ToggleFly()
+    if not LocalPlayer.Character then return end
+    local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    local rootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not rootPart then return end
+
+    FlyEnabled = not FlyEnabled
+
+    if FlyEnabled then
+        -- Enable fly
+        humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+
+        -- Create body velocity for smooth flying
+        FlyVelocity = Instance.new("BodyVelocity")
+        FlyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        FlyVelocity.Velocity = Vector3.new(0, 0, 0)
+        FlyVelocity.Parent = rootPart
+
+        -- Create body gyro for stability
+        local FlyGyro = Instance.new("BodyGyro")
+        FlyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+        FlyGyro.P = 10000
+        FlyGyro.CFrame = workspace.CurrentCamera.CFrame
+        FlyGyro.Parent = rootPart
+
+        -- Gravity removal
+        rootPart:FindFirstChildOfClass("BodyGyro").MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+
+        -- Flight controls
+        local flyConn
+        flyConn = RunService.Heartbeat:Connect(function()
+            if not FlyEnabled or not LocalPlayer.Character or not LocalPlayer.Character.Parent then
+                flyConn:Disconnect()
+                return
+            end
+
+            local moveVector = Vector3.new(0, 0, 0)
+            local cam = workspace.CurrentCamera
+            local flySpeed = Settings.FlySpeed * 50
+
+            -- WASD movement (camera-relative)
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                moveVector = moveVector + cam.CFrame.LookVector * flySpeed
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                moveVector = moveVector - cam.CFrame.LookVector * flySpeed
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                moveVector = moveVector - cam.CFrame.RightVector * flySpeed
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                moveVector = moveVector + cam.CFrame.RightVector * flySpeed
+            end
+
+            -- Vertical movement
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                moveVector = moveVector + Vector3.new(0, flySpeed, 0)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+                moveVector = moveVector - Vector3.new(0, flySpeed, 0)
+            end
+
+            -- Speed boost with Shift
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                moveVector = moveVector * 2
+            end
+
+            if FlyVelocity then
+                FlyVelocity.Velocity = moveVector
+            end
+
+            if FlyGyro then
+                FlyGyro.CFrame = cam.CFrame
+            end
+        end)
+
+        table.insert(FlyConnections, flyConn)
+        warn("Fly enabled! WASD/Space/Ctrl to move")
+
+    else
+        -- Disable fly
+        humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+
+        if FlyVelocity then
+            FlyVelocity:Destroy()
+            FlyVelocity = nil
+        end
+
+        local gyro = rootPart:FindFirstChildOfClass("BodyGyro")
+        if gyro then gyro:Destroy() end
+
+        -- Clean up connections
+        for _, conn in pairs(FlyConnections) do
+            if conn then conn:Disconnect() end
+        end
+        FlyConnections = {}
+
+        warn("Fly disabled")
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- TELEPORT SYSTEM
+-- ═══════════════════════════════════════════════════════════
+
+local TeleportTarget = nil
+local TeleportBeam = nil
+
+local function CreateTeleportBeam(targetPos)
+    if TeleportBeam then TeleportBeam:Destroy() end
+
+    TeleportBeam = Instance.new("Beam")
+    TeleportBeam.Attachment0 = Instance.new("Attachment", LocalPlayer.Character:WaitForChild("HumanoidRootPart"))
+    TeleportBeam.Attachment1 = Instance.new("Attachment", workspace.Terrain or workspace)
+    TeleportBeam.Attachment1.WorldPosition = targetPos
+    TeleportBeam.Color = ColorSequence.new(Color3.fromRGB(0, 255, 255))
+    TeleportBeam.Width0 = 2
+    TeleportBeam.Width1 = 2
+    TeleportBeam.FaceCamera = true
+    TeleportBeam.Transparency = NumberSequence.new(0, 0.8)
+    TeleportBeam.Parent = workspace.CurrentCamera
+end
+
+local function TeleportTo(position)
+    if not LocalPlayer.Character or not Settings.TeleportEnabled then return end
+    local rootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+
+    -- Create visual effect
+    CreateTeleportBeam(position)
+
+    -- Smooth teleport
+    local startCFrame = rootPart.CFrame
+    local endCFrame = CFrame.new(position)
+    local duration = 0.2
+    local startTime = tick()
+
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        local elapsed = tick() - startTime
+        local alpha = math.min(elapsed / duration, 1)
+
+        -- Smooth interpolation
+        rootPart.CFrame = startCFrame:Lerp(endCFrame, alpha)
+
+        if alpha >= 1 then
+            conn:Disconnect()
+            if TeleportBeam then
+                TeleportBeam:Destroy()
+                TeleportBeam = nil
+            end
+        end
+    end)
+end
+
+-- Teleport controls
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed or not Settings.TeleportEnabled then return end
+
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and UserInputService:IsKeyDown(Enum.KeyCode.LeftAlt) then
+        -- Alt + Click to teleport
+        local mouseLocation = UserInputService:GetMouseLocation()
+        local ray = workspace.CurrentCamera:ViewportPointToRay(mouseLocation.X, mouseLocation.Y)
+        local result = workspace:Raycast(ray.Origin, ray.Direction * 1000)
+
+        if result then
+            TeleportTo(result.Position + Vector3.new(0, 3, 0))
+        end
+    end
+
+    -- Number keys for saved positions
+    if input.KeyCode >= Enum.KeyCode.One and input.KeyCode <= Enum.KeyCode.Nine then
+        local index = input.KeyCode.Value - Enum.KeyCode.One.Value + 1
+        -- Could implement saved teleport positions here
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════
+-- FREECAM SYSTEM
+-- ═══════════════════════════════════════════════════════════
+
+local FreecamEnabled = false
+local FreecamCamera = nil
+local OriginalCamera = workspace.CurrentCamera
+local FreecamCFrame = CFrame.new()
+local FreecamVelocity = Vector3.new()
+
+local function ToggleFreecam()
+    FreecamEnabled = not FreecamEnabled
+
+    if FreecamEnabled then
+        -- Save original camera
+        OriginalCamera = workspace.CurrentCamera.CameraSubject
+
+        -- Set camera to freecam mode
+        workspace.CurrentCamera.CameraSubject = nil
+        workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+
+        -- Start at player position
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            FreecamCFrame = LocalPlayer.Character.HumanoidRootPart.CFrame
+        end
+
+        -- Freecam controls
+        local freecamConn
+        freecamConn = RunService.Heartbeat:Connect(function()
+            if not FreecamEnabled then
+                freecamConn:Disconnect()
+                return
+            end
+
+            local cam = workspace.CurrentCamera
+            local speed = 20
+            local multiplier = 1
+
+            -- Speed modifiers
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                multiplier = 3
+            elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+                multiplier = 0.5
+            end
+
+            local moveVector = Vector3.new(0, 0, 0)
+
+            -- Movement
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                moveVector = moveVector + cam.CFrame.LookVector * speed * multiplier
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                moveVector = moveVector - cam.CFrame.LookVector * speed * multiplier
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                moveVector = moveVector - cam.CFrame.RightVector * speed * multiplier
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                moveVector = moveVector + cam.CFrame.RightVector * speed * multiplier
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                moveVector = moveVector + Vector3.new(0, speed * multiplier, 0)
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftAlt) then
+                moveVector = moveVector - Vector3.new(0, speed * multiplier, 0)
+            end
+
+            -- Smooth movement
+            FreecamVelocity = FreecamVelocity:Lerp(moveVector, 0.1)
+            FreecamCFrame = FreecamCFrame + FreecamVelocity
+
+            cam.CFrame = FreecamCFrame
+        end)
+
+        warn("Freecam enabled! WASD/Space/Alt to move")
+
+    else
+        -- Restore original camera
+        workspace.CurrentCamera.CameraSubject = OriginalCamera
+        workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+
+        -- Reset to player
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            workspace.CurrentCamera.CFrame = LocalPlayer.Character.HumanoidRootPart.CFrame
+        end
+
+        warn("Freecam disabled")
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- THIRD PERSON SYSTEM
+-- ═══════════════════════════════════════════════════════════
+
+local ThirdPersonEnabled = false
+local OriginalCameraOffset = Vector3.new(0, 0, 0)
+local ThirdPersonConnection = nil
+
+local function UpdateThirdPerson()
+    if not LocalPlayer.Character or not workspace.CurrentCamera then return end
+
+    if Settings.ThirdPerson then
+        local rootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            local offset = Vector3.new(Settings.ThirdOffset, 0, -Settings.ThirdDistance)
+            local heightOffset = Vector3.new(0, Settings.ThirdHeight, 0)
+            local cameraCFrame = rootPart.CFrame:ToWorldSpace(CFrame.new(offset + heightOffset))
+
+            -- Look at player
+            local lookAtCFrame = CFrame.new(cameraCFrame.Position, rootPart.Position + Vector3.new(0, Settings.ThirdHeight, 0))
+
+            -- Apply smoothing
+            local currentCamCFrame = workspace.CurrentCamera.CFrame
+            local smoothness = 0.1 * Settings.ThirdSensitivity
+            workspace.CurrentCamera.CFrame = currentCamCFrame:Lerp(lookAtCFrame, smoothness)
+        end
+    end
+end
+
+local function ToggleThirdPerson()
+    ThirdPersonEnabled = Settings.ThirdPerson
+
+    if ThirdPersonEnabled then
+        -- Store original camera settings
+        OriginalCameraOffset = workspace.CurrentCamera.CFrame.Position -
+                              (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and
+                               LocalPlayer.Character.HumanoidRootPart.Position or Vector3.new())
+
+        -- Start third person update loop
+        ThirdPersonConnection = RunService.Heartbeat:Connect(UpdateThirdPerson)
+
+        warn("Third person enabled")
+    else
+        -- Restore original camera
+        if ThirdPersonConnection then
+            ThirdPersonConnection:Disconnect()
+            ThirdPersonConnection = nil
+        end
+
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            workspace.CurrentCamera.CFrame = LocalPlayer.Character.HumanoidRootPart.CFrame
+        end
+
+        warn("Third person disabled")
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- INFINITE JUMP SYSTEM
+-- ═══════════════════════════════════════════════════════════
+
+UserInputService.JumpRequest:Connect(function()
+    if Settings.InfiniteJump and LocalPlayer.Character then
+        local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════
+-- MOVEMENT UPDATE LOOP
+-- ═══════════════════════════════════════════════════════════
+
+-- Main update loop for movement features
+local MovementUpdateConnection
+MovementUpdateConnection = RunService.Heartbeat:Connect(function()
+    -- Speed boost updates
+    if Settings.SpeedBoost then
+        UpdateSpeedBoost()
+    end
+
+    -- No camera shaking
+    if Settings.NoCameraShaking then
+        local cam = workspace.CurrentCamera
+        if cam then
+            cam.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+            cam.CameraType = Enum.CameraType.Custom
+        end
+    end
+
+    -- Enable/Disable movement features based on settings
+    -- (These are toggled through the UI callbacks in the main script)
+end)
+
+-- Update movement features when settings change
+local function UpdateMovementFeatures()
+    -- Speed Boost
+    UpdateSpeedBoost()
+
+    -- Fly
+    if Settings.Fly and not FlyEnabled then
+        ToggleFly()
+    elseif not Settings.Fly and FlyEnabled then
+        ToggleFly()
+    end
+
+    -- Freecam
+    if Settings.Freecam and not FreecamEnabled then
+        ToggleFreecam()
+    elseif not Settings.Freecam and FreecamEnabled then
+        ToggleFreecam()
+    end
+
+    -- Third Person
+    ToggleThirdPerson()
+end
+
+-- Hook into UI callbacks (these would be called from the main UI system)
+_G.VesperUpdateMovement = UpdateMovementFeatures
+
+-- Auto-update when settings change (polling)
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+
+        local currentSpeedBoost = Settings.SpeedBoost
+        local currentFly = Settings.Fly
+        local currentFreecam = Settings.Freecam
+        local currentThirdPerson = Settings.ThirdPerson
+        local currentInfiniteJump = Settings.InfiniteJump
+
+        task.wait(0.1) -- Small delay to prevent race conditions
+
+        if currentSpeedBoost ~= Settings.SpeedBoost or
+           currentFly ~= Settings.Fly or
+           currentFreecam ~= Settings.Freecam or
+           currentThirdPerson ~= Settings.ThirdPerson or
+           currentInfiniteJump ~= Settings.InfiniteJump then
+            _G.VesperUpdateMovement()
+        end
+    end
+end)
+
 print("═══════════════════════════════")
 print("vesper.lua v2.0 - Clean Rewrite")
 print("═══════════════════════════════")
 print("Q = Noclip | RightShift = Menu")
+print("Alt+Click = Teleport | WASD = Movement")
 print("═══════════════════════════════")
 warn("Script loaded successfully!")
