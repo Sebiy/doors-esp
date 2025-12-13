@@ -234,30 +234,11 @@ local function ApplyDoorESP(room)
     local displayNum = roomNum + 1
     local text = string.format("DOOR %d\n%s", displayNum, hasKey and "LOCKED" or "OPEN")
 
-    -- CLEAN DOOR ESP METHOD - Target single main door part
-    local doorTarget = nil
-
-    -- Method 1: Find the main visible door part
-    for _, part in pairs(door:GetDescendants()) do
-        if part:IsA("BasePart") and part.Transparency < 1 and
-           not part.Name:find("Collision") and
-           not part.Name:find("Hitbox") and
-           not part.Name:find("Trigger") and
-           not part.Name:find("Prompt") then
-            doorTarget = part
-            break -- Take the first valid part
-        end
-    end
-
-    -- Method 2: If no valid part found, use the door model itself
-    if not doorTarget then
-        doorTarget = door
-    end
-
-    -- Apply ESP to single target only
-    if doorTarget and not HasESP(doorTarget) then
-        ApplyESP(doorTarget, text, Settings.DoorESPColor, "Door", room.Name)
-        OpenedDoors[door] = {opened = false, espTarget = doorTarget}
+    -- ORIGINAL DOOR ESP METHOD - Apply to entire door model for frame effect
+    -- Always apply ESP to the door model itself (creates the frame/gap effect)
+    if not HasESP(door) then
+        ApplyESP(door, text, Settings.DoorESPColor, "Door", room.Name)
+        OpenedDoors[door] = {opened = false, espTarget = door}
     end
 
     -- Monitor door opening
@@ -986,6 +967,7 @@ end)
 -- ═══════════════════════════════════════════════════════════
 
 local EntityTracked = {}
+local LastEyesNotification = 0 -- Prevent notification spam
 
 local function SetupEntityESP(entity, name, color)
     if EntityTracked[entity] then return end
@@ -1054,38 +1036,30 @@ RunService.Heartbeat:Connect(function()
     local ambush = Workspace:FindFirstChild("AmbushMoving")
     if ambush then SetupEntityESP(ambush, "AMBUSH", Color3.fromRGB(255, 100, 0)) end
     
-    -- Eyes (anti-damage system - keeps model visible but removes damage)
+    -- Eyes (COMPLETE NEUTRALIZATION - prevents all damage)
     local eyes = Workspace:FindFirstChild("Eyes")
     if eyes then
         if Settings.ScreechProtection then
-            -- Remove damage-causing parts but keep model visible
-            for _, part in pairs(eyes:GetDescendants()) do
-                if part:IsA("BasePart") and (
-                    part.Name:find("Damage") or
-                    part.Name:find("Hitbox") or
-                    part.Name:find("Trigger") or
-                    part.Name:find("Collision")
-                ) then
-                    pcall(function() part:Destroy() end)
-                end
-            end
+            -- COMPLETELY DESTROY EYES to prevent any damage
+            pcall(function() eyes:Destroy() end)
 
-            -- Remove any damage scripts
-            for _, script in pairs(eyes:GetDescendants()) do
-                if script:IsA("Script") or script:IsA("LocalScript") then
-                    pcall(function() script:Destroy() end)
-                end
-            end
-
-            -- Continuously heal player while Eyes exists
+            -- Restore full health immediately
             if LocalPlayer.Character then
                 local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-                if hum then hum.Health = hum.MaxHealth end
+                if hum then
+                    hum.Health = hum.MaxHealth
+                    hum.MaxHealth = hum.MaxHealth -- Ensure max health isn't reduced
+                end
             end
 
-            warn("👁️ Eyes damage removed - model kept visible!")
-            if Settings.EntityNotify then
-                Library:Notify({Title = "👁️ EYES NEUTRALIZED", Description = "Damage removed, model visible", Time = 3})
+            -- Notification with spam protection
+            local currentTime = tick()
+            if currentTime - LastEyesNotification > 5 then -- Only notify every 5 seconds
+                LastEyesNotification = currentTime
+                warn("👁️ Eyes completely destroyed - no damage possible!")
+                if Settings.EntityNotify then
+                    Library:Notify({Title = "👁️ EYES DESTROYED", Description = "Entity completely removed", Time = 3})
+                end
             end
         else
             SetupEntityESP(eyes, "EYES", Color3.fromRGB(255, 255, 0))
@@ -1093,33 +1067,54 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Eyes spawn detection (immediate anti-damage on spawn)
+-- Eyes spawn detection (INSTANT destruction on spawn)
 Workspace.ChildAdded:Connect(function(child)
     if child.Name == "Eyes" and Settings.ScreechProtection then
-        task.wait() -- Let it spawn
-        warn("👁️ Eyes spawn detected - removing damage!")
+        task.wait(0.1) -- Tiny delay to ensure it's spawned
+        warn("👁️ Eyes spawn detected - INSTANT destruction!")
 
-        -- Remove damage parts immediately
-        for _, part in pairs(child:GetDescendants()) do
-            if part:IsA("BasePart") and (
-                part.Name:find("Damage") or
-                part.Name:find("Hitbox") or
-                part.Name:find("Trigger") or
-                part.Name:find("Collision")
-            ) then
-                pcall(function() part:Destroy() end)
+        -- IMMEDIATELY destroy the entire entity
+        pcall(function() child:Destroy() end)
+
+        -- Full health restore
+        if LocalPlayer.Character then
+            local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+            if hum then
+                hum.Health = hum.MaxHealth
+                hum.MaxHealth = hum.MaxHealth
             end
         end
 
-        -- Remove damage scripts
-        for _, script in pairs(child:GetDescendants()) do
-            if script:IsA("Script") or script:IsA("LocalScript") then
-                pcall(function() script:Destroy() end)
+        -- Notification with spam protection
+        local currentTime = tick()
+        if currentTime - LastEyesNotification > 5 then
+            LastEyesNotification = currentTime
+            if Settings.EntityNotify then
+                Library:Notify({Title = "👁️ EYES SPAWN BLOCKED", Description = "Instantly destroyed!", Time = 3})
             end
         end
+    end
+end)
 
-        if Settings.EntityNotify then
-            Library:Notify({Title = "👁️ EYES SPAWN BLOCKED", Description = "Damage removed on spawn!", Time = 3})
+-- Continuous Eyes protection - additional safety layer
+task.spawn(function()
+    while true do
+        task.wait(0.5) -- Check every 0.5 seconds
+        if Settings.ScreechProtection then
+            -- Always heal player to max health if protection is on
+            if LocalPlayer.Character then
+                local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+                if hum and hum.Health < hum.MaxHealth then
+                    hum.Health = hum.MaxHealth
+                end
+            end
+
+            -- Double-check for Eyes entity and destroy if found
+            local eyes = Workspace:FindFirstChild("Eyes")
+            if eyes then
+                pcall(function() eyes:Destroy() end)
+                warn("👁️ Eyes found during scan - destroyed!")
+            end
         end
     end
 end)
