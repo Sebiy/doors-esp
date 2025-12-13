@@ -222,40 +222,81 @@ end
 
 local function ApplyDoorESP(room)
     if not Settings.DoorESP then return end
-    
+
     local roomNum = tonumber(room.Name)
     if not roomNum then return end
-    
+
     local door = room:FindFirstChild("Door")
     if not door then return end
-    if OpenedDoors[door] then return end
-    if HasESP(door) then return end
-    
+    if OpenedDoors[door] and OpenedDoors[door].opened then return end
+
     local hasKey = room:FindFirstChild("KeyObtain", true) ~= nil
     local displayNum = roomNum + 1
     local text = string.format("DOOR %d\n%s", displayNum, hasKey and "LOCKED" or "OPEN")
-    
-    -- Apply ESP to the door MODEL (highlights all parts inside)
-    ApplyESP(door, text, Settings.DoorESPColor, "Door", room.Name)
-    
+
+    -- FIX: Only apply ESP to visible door parts, not the entire model
+    local doorTarget = nil
+
+    -- Method 1: Try to find the main visible "Door" part inside the door model
+    local doorPart = door:FindFirstChild("Door")
+    if doorPart and doorPart:IsA("BasePart") and doorPart.Transparency < 1 then
+        doorTarget = doorPart
+    end
+
+    -- Method 2: If no specific "Door" part, try the PrimaryPart
+    if not doorTarget and door.PrimaryPart and door.PrimaryPart:IsA("BasePart") and door.PrimaryPart.Transparency < 1 then
+        doorTarget = door.PrimaryPart
+    end
+
+    -- Method 3: Find the largest visible part as fallback
+    if not doorTarget then
+        local largestPart = nil
+        local largestSize = 0
+        for _, part in pairs(door:GetDescendants()) do
+            if part:IsA("BasePart") and part.Transparency < 1 then
+                local partSize = part.Size.X * part.Size.Y * part.Size.Z
+                if partSize > largestSize then
+                    largestSize = partSize
+                    largestPart = part
+                end
+            end
+        end
+        doorTarget = largestPart
+    end
+
+    -- Only apply ESP if we found a valid visible target
+    if doorTarget and not HasESP(doorTarget) then
+        ApplyESP(doorTarget, text, Settings.DoorESPColor, "Door", room.Name)
+
+        -- Store reference for cleanup
+        OpenedDoors[door] = {
+            opened = false,
+            espTarget = doorTarget
+        }
+    end
+
     -- Monitor door opening
     for _, desc in pairs(door:GetDescendants()) do
         if desc:IsA("ProximityPrompt") then
             if Settings.InstantInteract then desc.HoldDuration = 0 end
             if Settings.DoorReach then desc.MaxActivationDistance = 20 end
-            
+
             desc.Triggered:Connect(function()
-                OpenedDoors[door] = true
-                ClearESP(door)
+                if OpenedDoors[door] and OpenedDoors[door].espTarget then
+                    ClearESP(OpenedDoors[door].espTarget)
+                end
+                OpenedDoors[door] = {opened = true, espTarget = nil}
                 warn(string.format("Door %d opened - ESP cleared", displayNum))
             end)
         end
     end
-    
+
     door:GetAttributeChangedSignal("Opened"):Connect(function()
         if door:GetAttribute("Opened") then
-            OpenedDoors[door] = true
-            ClearESP(door)
+            if OpenedDoors[door] and OpenedDoors[door].espTarget then
+                ClearESP(OpenedDoors[door].espTarget)
+            end
+            OpenedDoors[door] = {opened = true, espTarget = nil}
         end
     end)
 end
