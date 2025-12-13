@@ -10,6 +10,42 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local CurrentRooms = Workspace:WaitForChild("CurrentRooms")
 
+-- ═══════════════════════════════════════════════════════════
+-- WAVE EXECUTOR DEBUG SYSTEM
+-- ═══════════════════════════════════════════════════════════
+
+-- Initialize Wave Executor debug output
+local WaveDebug = {}
+local function setupWaveDebug()
+    if wave and wave.console then
+        -- Enable console redirection
+        wave.console.redirect(true)
+        wave.console.timestamp(true)
+
+        WaveDebug = {
+            print = function(msg) wave.print("[VESPER] " .. tostring(msg)) end,
+            debug = function(msg) wave.debug("[VESPER-DEBUG] " .. tostring(msg)) end,
+            info = function(msg) wave.log.info("[VESPER-INFO] " .. tostring(msg)) end,
+            warn = function(msg) wave.log.warn("[VESPER-WARN] " .. tostring(msg)) end,
+            error = function(msg) wave.log.error("[VESPER-ERROR] " .. tostring(msg)) end
+        }
+        WaveDebug.info("Wave Executor debug system initialized!")
+        return true
+    else
+        -- Fallback to standard print if Wave not available
+        WaveDebug = {
+            print = function(msg) print("[VESPER] " .. tostring(msg)) end,
+            debug = function(msg) print("[VESPER-DEBUG] " .. tostring(msg)) end,
+            info = function(msg) print("[VESPER-INFO] " .. tostring(msg)) end,
+            warn = function(msg) warn("[VESPER-WARN] " .. tostring(msg)) end,
+            error = function(msg) warn("[VESPER-ERROR] " .. tostring(msg)) end
+        }
+        return false
+    end
+end
+
+setupWaveDebug()
+
 -- Settings
 local Settings = {
     DoorESP = false,
@@ -81,6 +117,11 @@ local Settings = {
 local ESPRegistry = {} -- Tracks ALL ESP objects by instance
 local OpenedDoors = {} -- Tracks opened doors
 local CurrentPlayerRoom = nil -- Track player's current room
+
+-- Rainbow ESP System
+local RainbowESPEnabled = false
+local RainbowConnection = nil
+local RainbowHue = 0
 
 -- Forward declarations for fullbright (defined later)
 local ApplyFullbright, RestoreLighting
@@ -174,7 +215,7 @@ local function ApplyESP(instance, text, color, espType, roomName)
         end
     end)
     
-    warn(text .. " ESP applied!")
+    WaveDebug.debug(text .. " ESP applied!")
 end
 
 local function UpdateESPColor(espType, newColor)
@@ -191,6 +232,61 @@ local function UpdateESPColor(espType, newColor)
             end
         end
     end
+end
+
+-- Rainbow ESP System
+local function hueToRGB(hue)
+    local h = hue % 360
+    local c = 1
+    local x = c * (1 - math.abs((h / 60) % 2 - 1))
+    local m = 0
+
+    local r, g, b
+    if h < 60 then
+        r, g, b = c, x, 0
+    elseif h < 120 then
+        r, g, b = x, c, 0
+    elseif h < 180 then
+        r, g, b = 0, c, x
+    elseif h < 240 then
+        r, g, b = 0, x, c
+    elseif h < 300 then
+        r, g, b = x, 0, c
+    else
+        r, g, b = c, 0, x
+    end
+
+    return Color3.new(r + m, g + m, b + m)
+end
+
+local function updateRainbowESP()
+    if not Settings.RainbowESP then
+        if RainbowConnection then
+            RainbowConnection:Disconnect()
+            RainbowConnection = nil
+        end
+        return
+    end
+
+    if RainbowConnection then return end -- Already running
+
+    RainbowConnection = RunService.Heartbeat:Connect(function()
+        RainbowHue = (RainbowHue + 2) % 360
+        local rainbowColor = hueToRGB(RainbowHue)
+
+        for instance, data in pairs(ESPRegistry) do
+            if data.highlight then
+                data.highlight.FillColor = rainbowColor
+                data.highlight.OutlineColor = Color3.new(rainbowColor.R * 0.7, rainbowColor.G * 0.7, rainbowColor.B * 0.7)
+            end
+            if data.billboard then
+                local label = data.billboard:FindFirstChild("ESPLabel")
+                if label then label.TextColor3 = rainbowColor end
+            end
+        end
+    end)
+
+    WaveDebug.info("Rainbow ESP system activated!")
 end
 
 local function ClearAllESPOfType(espType)
@@ -234,11 +330,65 @@ local function ApplyDoorESP(room)
     local displayNum = roomNum + 1
     local text = string.format("DOOR %d\n%s", displayNum, hasKey and "LOCKED" or "OPEN")
 
-    -- ORIGINAL DOOR ESP METHOD - Apply to entire door model for frame effect
-    -- Always apply ESP to the door model itself (creates the frame/gap effect)
-    if not HasESP(door) then
-        ApplyESP(door, text, Settings.DoorESPColor, "Door", room.Name)
-        OpenedDoors[door] = {opened = false, espTarget = door}
+    -- TARGETED DOOR ESP METHOD - Find specific visible door parts only
+    local doorTarget = nil
+
+    -- Method 1: Look for the main door leaf/surface
+    local doorPart = door:FindFirstChild("Door")
+    if doorPart and doorPart:IsA("BasePart") and doorPart.Transparency < 1 then
+        doorTarget = doorPart
+        WaveDebug.debug("Found main Door part for room " .. room.Name)
+    end
+
+    -- Method 2: Look for door leaf/surface with different names
+    if not doorTarget then
+        local doorNames = {"DoorLeaf", "DoorSurface", "DoorMain", "DoorFrame"}
+        for _, name in pairs(doorNames) do
+            local part = door:FindFirstChild(name)
+            if part and part:IsA("BasePart") and part.Transparency < 1 then
+                doorTarget = part
+                WaveDebug.debug("Found door part '" .. name .. "' for room " .. room.Name)
+                break
+            end
+        end
+    end
+
+    -- Method 3: Find largest non-collision part
+    if not doorTarget then
+        local largestPart = nil
+        local largestSize = 0
+        for _, part in pairs(door:GetDescendants()) do
+            if part:IsA("BasePart") and part.Transparency < 1 and
+               not part.Name:find("Collision") and
+               not part.Name:find("Hitbox") and
+               not part.Name:find("Trigger") and
+               not part.Name:find("Prompt") then
+                local partSize = part.Size.X * part.Size.Y * part.Size.Z
+                if partSize > largestSize then
+                    largestSize = partSize
+                    largestPart = part
+                end
+            end
+        end
+        doorTarget = largestPart
+        if doorTarget then
+            WaveDebug.debug("Found largest door part for room " .. room.Name)
+        end
+    end
+
+    -- Method 4: Fallback to door PrimaryPart
+    if not doorTarget and door.PrimaryPart then
+        doorTarget = door.PrimaryPart
+        WaveDebug.debug("Using PrimaryPart for door in room " .. room.Name)
+    end
+
+    -- Apply ESP to the specific target found
+    if doorTarget and not HasESP(doorTarget) then
+        ApplyESP(doorTarget, text, Settings.DoorESPColor, "Door", room.Name)
+        OpenedDoors[door] = {opened = false, espTarget = doorTarget}
+        WaveDebug.info("Applied door ESP to room " .. room.Name .. " - Target: " .. doorTarget.Name)
+    else
+        WaveDebug.warn("Failed to find suitable ESP target for door in room " .. room.Name)
     end
 
     -- Monitor door opening
@@ -544,7 +694,11 @@ ESPGeneralGroup:AddToggle("UseAdornments", {
 ESPGeneralGroup:AddToggle("RainbowESP", {
     Text = "Rainbow ESP Enabled",
     Default = false,
-    Callback = function(Value) Settings.RainbowESP = Value end
+    Callback = function(Value)
+        Settings.RainbowESP = Value
+        updateRainbowESP()
+        WaveDebug.info("Rainbow ESP toggled: " .. tostring(Value))
+    end
 })
 
 ESPGeneralGroup:AddDivider()
@@ -1036,29 +1190,54 @@ RunService.Heartbeat:Connect(function()
     local ambush = Workspace:FindFirstChild("AmbushMoving")
     if ambush then SetupEntityESP(ambush, "AMBUSH", Color3.fromRGB(255, 100, 0)) end
     
-    -- Eyes (COMPLETE NEUTRALIZATION - prevents all damage)
+    -- Eyes (VISIBLE BUT HARMLESS - remove damage scripts/parts only)
     local eyes = Workspace:FindFirstChild("Eyes")
     if eyes then
         if Settings.ScreechProtection then
-            -- COMPLETELY DESTROY EYES to prevent any damage
-            pcall(function() eyes:Destroy() end)
+            WaveDebug.info("Eyes entity found - removing damage components")
 
-            -- Restore full health immediately
-            if LocalPlayer.Character then
-                local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-                if hum then
-                    hum.Health = hum.MaxHealth
-                    hum.MaxHealth = hum.MaxHealth -- Ensure max health isn't reduced
+            -- Remove damage-causing parts but keep visual model
+            local damagePartsRemoved = 0
+            for _, part in pairs(eyes:GetDescendants()) do
+                if part:IsA("BasePart") and (
+                    part.Name:find("Damage") or
+                    part.Name:find("Hitbox") or
+                    part.Name:find("Trigger") or
+                    part.Name:find("Collision") or
+                    part.Name:find("Hurt")
+                ) then
+                    pcall(function()
+                        part:Destroy()
+                        damagePartsRemoved = damagePartsRemoved + 1
+                    end)
                 end
+            end
+
+            -- Remove damage scripts
+            local scriptsRemoved = 0
+            for _, script in pairs(eyes:GetDescendants()) do
+                if script:IsA("Script") or script:IsA("LocalScript") then
+                    pcall(function()
+                        script:Destroy()
+                        scriptsRemoved = scriptsRemoved + 1
+                    end)
+                end
+            end
+
+            WaveDebug.info("Removed " .. damagePartsRemoved .. " damage parts and " .. scriptsRemoved .. " scripts from Eyes")
+
+            -- Apply ESP to visible Eyes model
+            if not HasESP(eyes) then
+                SetupEntityESP(eyes, "EYES (HARMLESS)", Color3.fromRGB(0, 255, 0))
             end
 
             -- Notification with spam protection
             local currentTime = tick()
-            if currentTime - LastEyesNotification > 5 then -- Only notify every 5 seconds
+            if currentTime - LastEyesNotification > 10 then -- Only notify every 10 seconds
                 LastEyesNotification = currentTime
-                warn("👁️ Eyes completely destroyed - no damage possible!")
+                WaveDebug.info("Eyes damage neutralized - model kept visible")
                 if Settings.EntityNotify then
-                    Library:Notify({Title = "👁️ EYES DESTROYED", Description = "Entity completely removed", Time = 3})
+                    Library:Notify({Title = "👁️ EYES NEUTRALIZED", Description = "Visible but harmless", Time = 3})
                 end
             end
         else
@@ -1067,53 +1246,107 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Eyes spawn detection (INSTANT destruction on spawn)
+-- Eyes spawn detection (VISIBLE BUT HARMLESS on spawn)
 Workspace.ChildAdded:Connect(function(child)
     if child.Name == "Eyes" and Settings.ScreechProtection then
-        task.wait(0.1) -- Tiny delay to ensure it's spawned
-        warn("👁️ Eyes spawn detected - INSTANT destruction!")
+        task.wait(0.2) -- Let it fully spawn
+        WaveDebug.info("Eyes entity spawned - neutralizing damage components")
 
-        -- IMMEDIATELY destroy the entire entity
-        pcall(function() child:Destroy() end)
-
-        -- Full health restore
-        if LocalPlayer.Character then
-            local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-            if hum then
-                hum.Health = hum.MaxHealth
-                hum.MaxHealth = hum.MaxHealth
+        -- Remove damage-causing parts
+        local damagePartsRemoved = 0
+        for _, part in pairs(child:GetDescendants()) do
+            if part:IsA("BasePart") and (
+                part.Name:find("Damage") or
+                part.Name:find("Hitbox") or
+                part.Name:find("Trigger") or
+                part.Name:find("Collision") or
+                part.Name:find("Hurt")
+            ) then
+                pcall(function()
+                    part:Destroy()
+                    damagePartsRemoved = damagePartsRemoved + 1
+                end)
             end
+        end
+
+        -- Remove damage scripts
+        local scriptsRemoved = 0
+        for _, script in pairs(child:GetDescendants()) do
+            if script:IsA("Script") or script:IsA("LocalScript") then
+                pcall(function()
+                    script:Destroy()
+                    scriptsRemoved = scriptsRemoved + 1
+                end)
+            end
+        end
+
+        WaveDebug.info("Spawn Eyes: Removed " .. damagePartsRemoved .. " damage parts and " .. scriptsRemoved .. " scripts")
+
+        -- Apply ESP to the harmless Eyes
+        if not HasESP(child) then
+            SetupEntityESP(child, "EYES (HARMLESS)", Color3.fromRGB(0, 255, 0))
         end
 
         -- Notification with spam protection
         local currentTime = tick()
-        if currentTime - LastEyesNotification > 5 then
+        if currentTime - LastEyesNotification > 10 then
             LastEyesNotification = currentTime
             if Settings.EntityNotify then
-                Library:Notify({Title = "👁️ EYES SPAWN BLOCKED", Description = "Instantly destroyed!", Time = 3})
+                Library:Notify({Title = "👁️ EYES SPAWNED", Description = "Neutralized and visible!", Time = 3})
             end
         end
     end
 end)
 
--- Continuous Eyes protection - additional safety layer
+-- ENTITY DAMAGE HEALING SYSTEM - Heals from all entity damage
 task.spawn(function()
+    local lastHealth = 100
+    local damageTaken = 0
+
     while true do
-        task.wait(0.5) -- Check every 0.5 seconds
-        if Settings.ScreechProtection then
-            -- Always heal player to max health if protection is on
-            if LocalPlayer.Character then
-                local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-                if hum and hum.Health < hum.MaxHealth then
+        task.wait(0.3) -- Check every 0.3 seconds for quick healing
+
+        if Settings.ScreechProtection and LocalPlayer.Character then
+            local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+            if hum then
+                -- Track damage taken
+                if hum.Health < lastHealth then
+                    damageTaken = damageTaken + (lastHealth - hum.Health)
+                    WaveDebug.warn("Entity damage detected! Healing " .. math.floor(lastHealth - hum.Health) .. " HP")
+                end
+
+                lastHealth = hum.Health
+
+                -- Heal to max health (useful for all entity damage)
+                if hum.Health < hum.MaxHealth then
+                    local healAmount = hum.MaxHealth - hum.Health
                     hum.Health = hum.MaxHealth
+
+                    if healAmount > 1 then
+                        WaveDebug.info("Healed " .. math.floor(healAmount) .. " HP from entity damage")
+                    end
                 end
             end
 
-            -- Double-check for Eyes entity and destroy if found
+            -- Double-check for any remaining Eyes damage parts
             local eyes = Workspace:FindFirstChild("Eyes")
             if eyes then
-                pcall(function() eyes:Destroy() end)
-                warn("👁️ Eyes found during scan - destroyed!")
+                local foundDamageParts = false
+                for _, part in pairs(eyes:GetDescendants()) do
+                    if part:IsA("BasePart") and (
+                        part.Name:find("Damage") or
+                        part.Name:find("Hitbox") or
+                        part.Name:find("Trigger") or
+                        part.Name:find("Hurt")
+                    ) then
+                        pcall(function() part:Destroy() end)
+                        foundDamageParts = true
+                    end
+                end
+
+                if foundDamageParts then
+                    WaveDebug.debug("Found and removed additional Eyes damage parts")
+                end
             end
         end
     end
@@ -1770,10 +2003,14 @@ task.spawn(function()
     end
 end)
 
-print("═══════════════════════════════")
-print("vesper.lua v2.0 - Clean Rewrite")
-print("═══════════════════════════════")
-print("Q = Noclip | RightShift = Menu")
-print("Alt+Click = Teleport | WASD = Movement")
-print("═══════════════════════════════")
-warn("Script loaded successfully!")
+WaveDebug.print("═══════════════════════════════")
+WaveDebug.print("vesper.lua v2.0 - Enhanced Edition")
+WaveDebug.print("═══════════════════════════════")
+WaveDebug.print("✅ Wave Debug System: ACTIVE")
+WaveDebug.print("✅ Rainbow ESP: IMPLEMENTED")
+WaveDebug.print("✅ Entity Healing: ACTIVE")
+WaveDebug.print("✅ Enhanced Door ESP: ACTIVE")
+WaveDebug.print("Q = Noclip | RightShift = Menu")
+WaveDebug.print("Alt+Click = Teleport | WASD = Movement")
+WaveDebug.print("═══════════════════════════════")
+WaveDebug.info("Script loaded successfully!")
