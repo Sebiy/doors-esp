@@ -234,34 +234,30 @@ local function ApplyDoorESP(room)
     local displayNum = roomNum + 1
     local text = string.format("DOOR %d\n%s", displayNum, hasKey and "LOCKED" or "OPEN")
 
-    -- WORKING DOOR ESP METHOD - Highlight all visible door parts
-    -- Apply highlight only to visible door parts (not collision/hitboxes)
-    local doorTargets = {}
+    -- CLEAN DOOR ESP METHOD - Target single main door part
+    local doorTarget = nil
+
+    -- Method 1: Find the main visible door part
     for _, part in pairs(door:GetDescendants()) do
         if part:IsA("BasePart") and part.Transparency < 1 and
            not part.Name:find("Collision") and
            not part.Name:find("Hitbox") and
            not part.Name:find("Trigger") and
            not part.Name:find("Prompt") then
-            table.insert(doorTargets, part)
+            doorTarget = part
+            break -- Take the first valid part
         end
     end
 
-    -- Apply ESP to all valid door parts
-    local appliedTargets = {}
-    for _, target in pairs(doorTargets) do
-        if not HasESP(target) then
-            ApplyESP(target, text, Settings.DoorESPColor, "Door", room.Name)
-            table.insert(appliedTargets, target)
-        end
+    -- Method 2: If no valid part found, use the door model itself
+    if not doorTarget then
+        doorTarget = door
     end
 
-    -- Store references for cleanup
-    if #appliedTargets > 0 then
-        OpenedDoors[door] = {
-            opened = false,
-            espTargets = appliedTargets
-        }
+    -- Apply ESP to single target only
+    if doorTarget and not HasESP(doorTarget) then
+        ApplyESP(doorTarget, text, Settings.DoorESPColor, "Door", room.Name)
+        OpenedDoors[door] = {opened = false, espTarget = doorTarget}
     end
 
     -- Monitor door opening
@@ -271,12 +267,10 @@ local function ApplyDoorESP(room)
             if Settings.DoorReach then desc.MaxActivationDistance = 20 end
 
             desc.Triggered:Connect(function()
-                if OpenedDoors[door] and OpenedDoors[door].espTargets then
-                    for _, target in pairs(OpenedDoors[door].espTargets) do
-                        ClearESP(target)
-                    end
+                if OpenedDoors[door] and OpenedDoors[door].espTarget then
+                    ClearESP(OpenedDoors[door].espTarget)
                 end
-                OpenedDoors[door] = {opened = true, espTargets = {}}
+                OpenedDoors[door] = {opened = true, espTarget = nil}
                 warn(string.format("Door %d opened - ESP cleared", displayNum))
             end)
         end
@@ -284,12 +278,10 @@ local function ApplyDoorESP(room)
 
     door:GetAttributeChangedSignal("Opened"):Connect(function()
         if door:GetAttribute("Opened") then
-            if OpenedDoors[door] and OpenedDoors[door].espTargets then
-                for _, target in pairs(OpenedDoors[door].espTargets) do
-                    ClearESP(target)
-                end
+            if OpenedDoors[door] and OpenedDoors[door].espTarget then
+                ClearESP(OpenedDoors[door].espTarget)
             end
-            OpenedDoors[door] = {opened = true, espTargets = {}}
+            OpenedDoors[door] = {opened = true, espTarget = nil}
         end
     end)
 end
