@@ -1364,189 +1364,114 @@ setupEntityDetection()
 
 -- Eyes spawn detection is handled by setupOriginalEyesDetection() function
 
--- MULTIPLE APPROACHES EYES PROTECTION SYSTEM - Try different methods
-local EyesProtectionMethod = 1 -- Change this number to test different approaches
--- 1 = Remove eye details only
--- 2 = Complete destruction
--- 3 = Script removal + damage blocking
--- 4 = RemoteEvent blocking
--- 5 = Camera manipulation
--- 6 = Teleport away
--- 7 = Invincibility shield
--- 8 = All methods combined
+-- TRUE EYES PROTECTION SYSTEM - Based on actual raycast damage mechanics
+local function setupRealEyesProtection()
+    local protected = false
 
-local function setupEyesProtectionSystem()
-    local eyesProcessed = false
-    local originalCameraFOV = nil
+    -- Hook workspace.Raycast to block Eyes detection
+    local workspaceRaycast = workspace.Raycast
 
-    -- APPROACH 1: Remove eye details only (keeps entity visible)
-    local function approach1_RemoveEyeDetails(eyes)
-        warn("👁️ Approach 1: Removing eye details only")
-        local eyeDetailParts = {"Eyeball", "Pupil", "Iris", "EyeL", "EyeR", "EyeMesh", "EyePart"}
-        for _, partName in pairs(eyeDetailParts) do
-            local part = eyes:FindFirstChild(partName, true)
-            if part then
-                part:Destroy()
-            end
-        end
-    end
+    workspace.Raycast = function(origin, direction, raycastParams, extras)
+        local result = workspaceRaycast(origin, direction, raycastParams, extras)
 
-    -- APPROACH 2: Complete destruction
-    local function approach2_CompleteDestruction(eyes)
-        warn("👁️ Approach 2: Complete destruction")
-        eyes:Destroy()
-    end
+        -- Check if the raycast hit Eyes
+        if result and Settings.ScreechProtection then
+            local hitPart = result.Instance
 
-    -- APPROACH 3: Script removal + damage blocking
-    local function approach3_ScriptRemoval(eyes)
-        warn("👁️ Approach 3: Script removal + damage blocking")
-        -- Remove all scripts
-        for _, script in pairs(eyes:GetDescendants()) do
-            if script:IsA("Script") or script:IsA("LocalScript") then
-                script:Destroy()
-            end
-        end
-        -- Disable damage parts
-        for _, part in pairs(eyes:GetDescendants()) do
-            if part.Name:find("Damage") or part.Name:find("Kill") or part.Name:find("Hurt") then
-                part.CanTouch = false
-                if part:IsA("BasePart") then
-                    part.Transparency = 1
-                end
-            end
-        end
-    end
-
-    -- APPROACH 4: RemoteEvent blocking
-    local function approach4_RemoteEventBlocking()
-        warn("👁️ Approach 4: RemoteEvent blocking")
-        local ReplicatedStorage = game:GetService("ReplicatedStorage")
-        local remotes = ReplicatedStorage:FindFirstChild("RemotesFolder") or ReplicatedStorage
-
-        for _, remote in pairs(remotes:GetDescendants()) do
-            if remote:IsA("RemoteEvent") then
-                pcall(function()
-                    local original = remote.OnClientEvent
-                    remote.OnClientEvent = function(...)
-                        local args = {...}
-                        if type(args[1]) == "string" and (args[1]:lower():find("eyes") or args[1]:lower():find("damage")) then
-                            return nil -- Block the event
-                        end
-                        return original:Fire(...)
+            -- Check if we hit Eyes entity
+            if hitPart.Name == "Eyes" or hitPart:IsDescendantOf(workspace:FindFirstChild("Eyes")) then
+                -- Check if raycast is from player character (likely damage raycast)
+                local char = LocalPlayer.Character
+                if char then
+                    local humanoidRootPart = char:FindFirstChild("HumanoidRootPart")
+                    if humanoidRootPart and (origin - humanoidRootPart.Position).Magnitude < 5 then
+                        WaveDebug.debug("Blocked Eyes damage raycast!")
+                        return nil -- Block the raycast
                     end
-                end)
+                end
             end
         end
+
+        return result
     end
 
-    -- APPROACH 5: Camera manipulation
-    local function approach5_CameraManipulation(eyes)
-        warn("👁️ Approach 5: Camera manipulation")
-        local cam = workspace.CurrentCamera
-        if cam and not originalCameraFOV then
-            originalCameraFOV = cam.FieldOfView
+    -- Also protect camera-based raycasts
+    local cam = workspace.CurrentCamera
+    local lastLookTime = 0
 
-            task.spawn(function()
-                while eyes and eyes.Parent do
-                    pcall(function()
-                        -- Look away from Eyes
-                        local char = LocalPlayer.Character
-                        if char and char:FindFirstChild("HumanoidRootPart") then
-                            local lookDir = (char.HumanoidRootPart.Position - eyes.Position).Unit
-                            cam.CFrame = CFrame.new(cam.CFrame.Position, cam.CFrame.Position + lookDir)
-                        end
-                    end)
-                    task.wait()
-                end
+    -- Create invisible wall between player and Eyes
+    local function createProtectionWall(eyes)
+        if not LocalPlayer.Character or not eyes then return end
 
-                -- Restore camera
-                if originalCameraFOV then
-                    cam.FieldOfView = originalCameraFOV
-                end
-            end)
-        end
-    end
+        local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
 
-    -- APPROACH 6: Teleport away
-    local function approach6_TeleportAway(eyes)
-        warn("👁️ Approach 6: Teleport away")
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            local eyesPos = eyes.Position
-            local awayDir = (char.HumanoidRootPart.Position - eyesPos).Unit
-            char.HumanoidRootPart.Position = eyesPos + awayDir * 100
-        end
-    end
+        local wall = Instance.new("Part")
+        wall.Name = "EyesProtectionWall"
+        wall.Size = Vector3.new(1, 20, 10)
+        wall.Material = Enum.Material.ForceField
+        wall.Transparency = 1
+        wall.CanCollide = false
+        wall.Anchored = true
 
-    -- APPROACH 7: Invincibility shield
-    local function approach7_InvincibilityShield()
-        warn("👁️ Approach 7: Invincibility shield")
-        task.spawn(function()
-            while Workspace:FindFirstChild("Eyes") and LocalPlayer.Character do
-                local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-                if hum then
-                    hum.MaxHealth = 1000
-                    hum.Health = 1000
-                    hum.BreakJointsOnDeath = false
-                end
-                task.wait(0.1)
-            end
+        -- Position wall between player and eyes
+        local eyesPos = eyes:GetPivot().Position
+        local playerPos = hrp.Position
+        local midPoint = (eyesPos + playerPos) / 2
+
+        wall.CFrame = CFrame.new(midPoint, eyesPos)
+        wall.Parent = workspace
+
+        -- Remove after 1 second
+        task.delay(1, function()
+            if wall then wall:Destroy() end
         end)
-    end
-
-    -- APPROACH 8: All methods combined
-    local function approach8_AllMethods(eyes)
-        warn("👁️ Approach 8: ALL METHODS COMBINED")
-        approach1_RemoveEyeDetails(eyes)
-        approach3_ScriptRemoval(eyes)
-        approach4_RemoteEventBlocking()
-        approach5_CameraManipulation(eyes)
-        approach7_InvincibilityShield()
     end
 
     -- Main protection function
     local function protectFromEyes()
         local eyes = Workspace:FindFirstChild("Eyes")
-        if eyes and Settings.ScreechProtection and not eyesProcessed then
-            eyesProcessed = true
+        if eyes and Settings.ScreechProtection and not protected then
+            protected = true
+
+            warn("👁️ EYES DETECTED - Activating raycast protection!")
 
             if Settings.EntityNotify then
-                Library:Notify({Title = "👁️ EYES PROTECTION", Description = "Method " .. EyesProtectionMethod .. " activated", Time = 3})
+                Library:Notify({Title = "👁️ EYES PROTECTED", Description = "Line-of-sight raycasts blocked!", Time = 3})
             end
 
-            -- Apply the selected approach
-            if EyesProtectionMethod == 1 then
-                approach1_RemoveEyeDetails(eyes)
-            elseif EyesProtectionMethod == 2 then
-                approach2_CompleteDestruction(eyes)
-            elseif EyesProtectionMethod == 3 then
-                approach3_ScriptRemoval(eyes)
-            elseif EyesProtectionMethod == 4 then
-                approach4_RemoteEventBlocking()
-            elseif EyesProtectionMethod == 5 then
-                approach5_CameraManipulation(eyes)
-            elseif EyesProtectionMethod == 6 then
-                approach6_TeleportAway(eyes)
-            elseif EyesProtectionMethod == 7 then
-                approach7_InvincibilityShield()
-            elseif EyesProtectionMethod == 8 then
-                approach8_AllMethods(eyes)
-            end
-
-            -- Reset after delay
-            task.delay(3, function()
-                eyesProcessed = false
+            -- Create protection walls periodically
+            task.spawn(function()
+                while eyes and eyes.Parent and Settings.ScreechProtection do
+                    createProtectionWall(eyes)
+                    task.wait(0.4) -- Faster than damage rate
+                end
+                protected = false
             end)
+
+            -- Override Humanoid:TakeDamage to prevent damage
+            if LocalPlayer.Character then
+                local hum = LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
+                if hum then
+                    local originalTakeDamage = hum.TakeDamage
+                    hum.TakeDamage = function(self, amount)
+                        -- Check if Eyes exists
+                        if workspace:FindFirstChild("Eyes") and Settings.ScreechProtection then
+                            WaveDebug.debug("Blocked " .. amount .. " damage from Eyes!")
+                            return -- Don't apply damage
+                        end
+                        return originalTakeDamage(self, amount)
+                    end
+                end
+            end
         end
     end
 
     -- Monitoring
     task.spawn(function()
         while true do
-            if Settings.ScreechProtection then
-                protectFromEyes()
-            end
-            task.wait(0.3)
+            protectFromEyes()
+            task.wait(0.2)
         end
     end)
 
@@ -1558,7 +1483,7 @@ local function setupEyesProtectionSystem()
         end
     end)
 
-    -- ESP (simple)
+    -- ESP
     local function checkForEyesESP()
         local EyesModel = Workspace:FindFirstChild("Eyes")
         if EyesModel and not EyesModel:GetAttribute("ESPAdded") and Settings.EntityESP then
@@ -1593,7 +1518,7 @@ local function setupEyesProtectionSystem()
                         local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                         if hrp then
                             local dist = math.floor((hrp.Position - EyesModel.Position).Magnitude)
-                            label.Text = "👁️ EYES - " .. dist .. " studs (Method " .. EyesProtectionMethod .. ")"
+                            label.Text = "👁️ EYES - " .. dist .. " studs (Protected)"
                         end
                     end)
                     task.wait(0.5)
@@ -1608,33 +1533,8 @@ local function setupEyesProtectionSystem()
     RunService.Heartbeat:Connect(checkForEyesESP)
 end
 
--- Quick method switching system (press keys to change method)
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-
-    -- Press number keys 1-8 to switch methods
-    if input.KeyCode >= Enum.KeyCode.One and input.KeyCode <= Enum.KeyCode.Eight then
-        local method = input.KeyCode.Value - Enum.KeyCode.One.Value + 1
-        EyesProtectionMethod = method
-
-        Library:Notify({
-            Title = "👁️ EYES PROTECTION",
-            Description = "Switched to Method " .. method .. ":\n" ..
-                (method == 1 and "Remove eye details only" or
-                 method == 2 and "Complete destruction" or
-                 method == 3 and "Script removal + damage blocking" or
-                 method == 4 and "RemoteEvent blocking" or
-                 method == 5 and "Camera manipulation" or
-                 method == 6 and "Teleport away" or
-                 method == 7 and "Invincibility shield" or
-                 method == 8 and "All methods combined"),
-            Time = 3
-        })
-    end
-end)
-
--- Initialize the Eyes protection system
-setupEyesProtectionSystem()
+-- Initialize real Eyes protection
+setupRealEyesProtection()
 
 -- Screech protection (safe check)
 task.spawn(function()
