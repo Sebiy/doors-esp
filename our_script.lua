@@ -1624,54 +1624,137 @@ end
 -- Initialize comprehensive Eyes protection
 setupComprehensiveEyesProtection()
 
--- AGGRESSIVE ESP CLEANUP - Remove ESP from old rooms
+-- SUPER AGGRESSIVE ESP CLEANUP - Specifically for wardrobes and gold
 task.spawn(function()
     while true do
-        task.wait(1) -- Check every second
+        task.wait(0.5) -- Check every half second - more aggressive
 
         if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
             local playerPos = LocalPlayer.Character.HumanoidRootPart.Position
             local CurrentRoom = getCurrentRoom()
+            local currentRoomNum = 0
 
-            -- Clean up ESP from items/entities that are too far
+            -- Get current room number more reliably
+            if CurrentRoom then
+                currentRoomNum = tonumber(string.match(CurrentRoom.Name, "%d+")) or tonumber(string.match(CurrentRoom.Name, "Room_(%d+)")) or 0
+            end
+
+            -- Clean up ALL ESP items that are in old rooms
             for instance, data in pairs(ESPRegistry) do
                 if instance and instance.Parent then
-                    -- Get position of the ESP target
+                    -- Get position more reliably
                     local targetPos = nil
+                    local targetName = ""
+
+                    -- Try multiple ways to get position
                     if instance:IsA("BasePart") then
                         targetPos = instance.Position
-                    elseif instance:IsA("Model") and instance.PrimaryPart then
-                        targetPos = instance.PrimaryPart.Position
-                    elseif data.position then
-                        targetPos = data.position
+                        targetName = instance.Name
+                    elseif instance:IsA("Model") then
+                        if instance.PrimaryPart then
+                            targetPos = instance.PrimaryPart.Position
+                        else
+                            -- Try to find any BasePart in the model
+                            for _, part in pairs(instance:GetDescendants()) do
+                                if part:IsA("BasePart") then
+                                    targetPos = part.Position
+                                    break
+                                end
+                            end
+                        end
+                        targetName = instance.Name
                     end
 
+                    -- If we have a position, check if it should be removed
                     if targetPos then
                         local distance = (playerPos - targetPos).Magnitude
 
-                        -- Remove ESP if too far away (> 150 studs)
-                        if distance > 150 then
+                        -- Get room number for this item
+                        local instanceRoom = instance.Parent
+                        local instanceRoomNum = 0
+
+                        -- Try to find room number by going up the hierarchy
+                        local parent = instance.Parent
+                        while parent and parent ~= game and parent ~= workspace do
+                            local roomMatch = string.match(parent.Name, "%d+")
+                            if roomMatch then
+                                instanceRoomNum = tonumber(roomMatch)
+                                break
+                            end
+                            parent = parent.Parent
+                        end
+
+                        -- AGGRESSIVE CLEANUP RULES:
+
+                        -- Rule 1: Remove ALL wardrobe and gold ESP from previous rooms
+                        if string.find(targetName:lower(), "wardrobe") or string.find(targetName:lower(), "gold") then
+                            if instanceRoomNum > 0 and currentRoomNum > 0 and instanceRoomNum < currentRoomNum then
+                                -- This is a wardrobe/gold from a previous room - REMOVE IT
+                                ClearESP(instance)
+                                continue
+                            end
+                        end
+
+                        -- Rule 2: Remove if too far away (> 80 studs instead of 150)
+                        if distance > 80 then
                             ClearESP(instance)
                             continue
                         end
 
-                        -- Also check if it's in a room we've passed
-                        if CurrentRoom then
-                            local instanceRoom = GetRoomName(instance)
-                            if instanceRoom then
-                                local currentRoomNum = tonumber(CurrentRoom.Name:match("%d+")) or 0
-                                local instanceRoomNum = tonumber(instanceRoom:match("%d+")) or 0
+                        -- Rule 3: Remove if more than 1 room behind (more aggressive)
+                        if instanceRoomNum > 0 and currentRoomNum > 0 and (currentRoomNum - instanceRoomNum) > 1 then
+                            ClearESP(instance)
+                            continue
+                        end
 
-                                -- Remove if we're more than 2 rooms ahead
-                                if currentRoomNum - instanceRoomNum > 2 then
-                                    ClearESP(instance)
-                                end
+                        -- Rule 4: Special case for wardrobes - be even more aggressive
+                        if string.find(targetName:lower(), "wardrobe") then
+                            -- Remove wardrobes from rooms behind us even if close
+                            if instanceRoomNum > 0 and currentRoomNum > 0 and instanceRoomNum < currentRoomNum - 1 then
+                                ClearESP(instance)
                             end
                         end
+                    else
+                        -- No position found - remove it
+                        ClearESP(instance)
                     end
                 else
-                    -- Remove orphaned ESP
+                    -- No parent - remove it
                     ClearESP(instance)
+                end
+            end
+        end
+    end
+end)
+
+-- Additional cleanup specifically for wardrobes
+task.spawn(function()
+    while true do
+        task.wait(1) -- Every second
+
+        -- Find all wardrobes with ESP and remove if they're not in current room
+        for _, wardrobe in pairs(Workspace:GetDescendants()) do
+            if wardrobe.Name:lower():find("wardrobe") then
+                if wardrobe:FindFirstChild("ESPBillboard") or wardrobe:FindFirstChildWhichIsA("Highlight") then
+                    -- Check if this wardrobe is in the current room
+                    local inCurrentRoom = false
+                    local CurrentRoom = getCurrentRoom()
+
+                    if CurrentRoom then
+                        local parent = wardrobe.Parent
+                        while parent and parent ~= game and parent ~= workspace do
+                            if parent == CurrentRoom then
+                                inCurrentRoom = true
+                                break
+                            end
+                            parent = parent.Parent
+                        end
+                    end
+
+                    -- If not in current room, remove ESP
+                    if not inCurrentRoom then
+                        ClearESP(wardrobe)
+                    end
                 end
             end
         end
