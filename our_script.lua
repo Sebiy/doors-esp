@@ -637,6 +637,9 @@ local Tabs = {
     Player = Window:AddTab("Player", "user"),
     Visuals = Window:AddTab("Visuals", "monitor"),
     Settings = Window:AddTab("UI Settings", "settings"),
+    Exploits = Window:AddTab("Exploits", "shield"),
+    Teleport = Window:AddTab("Teleport", "map"),
+    Combat = Window:AddTab("Combat", "sword"),
 }
 
 -- ═══════════════════════════════════════════════════════════
@@ -736,11 +739,7 @@ NotifyGroup:AddToggle("NotifyInChat", {
 
 NotifyGroup:AddDivider()
 
-NotifyGroup:AddToggle("ScreechProtection", {
-    Text = "Screech/Eyes Protection",
-    Default = false,
-    Callback = function(Value) Settings.ScreechProtection = Value end
-})
+-- ScreechProtection moved to Exploits tab
 
 local AuraGroup = Tabs.Main:AddRightGroupbox("Auras", "sparkles")
 
@@ -1216,8 +1215,214 @@ ThemeManager:ApplyToTab(Tabs.Settings)
 
 Library:Notify({
     Title = "vesper.lua loaded!",
-    Description = "DOORS script v2.0 | Press RightShift to toggle",
+    Description = "DOORS script v2.1 | Press RightShift to toggle",
     Time = 5
+})
+
+-- ═══════════════════════════════════════════════════════════
+-- EXPLOITS TAB
+-- ═══════════════════════════════════════════════════════════
+
+local ProtectionGroup = Tabs.Exploits:AddLeftGroupbox("Protection", "shield")
+
+ProtectionGroup:AddToggle("ScreechProtection", {
+    Text = "Anti Screech",
+    Default = false,
+    Callback = function(Value)
+        Settings.ScreechProtection = Value
+        WaveDebug.info("Screech protection: " .. tostring(Value))
+    end
+}):AddTooltip("Protects from Screech jumpscare")
+
+ProtectionGroup:AddToggle("EyesProtection", {
+    Text = "Anti Eyes (Working!)",
+    Default = false,
+    Callback = function(Value)
+        Settings.ScreechProtection = Value -- Uses same setting
+        WaveDebug.info("Eyes protection: " .. tostring(Value))
+    end
+}):AddTooltip("Makes Eyes visible but harmless")
+
+ProtectionGroup:AddToggle("AmbushImmunity", {
+    Text = "Anti Ambush",
+    Default = false,
+    Callback = function(Value)
+        Settings.AmbushImmunity = Value
+        if Value then
+            Library:Notify({Title = "Ambush Immunity", Description = "You are now immune to Ambush!", Time = 3})
+        end
+    end
+})
+
+ProtectionGroup:AddToggle("RushImmunity", {
+    Text = "Anti Rush",
+    Default = false,
+    Callback = function(Value)
+        Settings.RushImmunity = Value
+        if Value then
+            Library:Notify({Title = "Rush Immunity", Description = "You are now immune to Rush!", Time = 3})
+        end
+    end
+})
+
+ProtectionGroup:AddDivider()
+
+ProtectionGroup:AddToggle("SeekImmunity", {
+    Text = "Anti Seek",
+    Default = false,
+    Callback = function(Value)
+        Settings.SeekImmunity = Value
+        if Value then
+            Library:Notify({Title = "Seek Immunity", Description = "Seek cannot harm you!", Time = 3})
+        end
+    end
+})
+
+ProtectionGroup:AddToggle("HaltImmunity", {
+    Text = "Anti Halt",
+    Default = false,
+    Callback = function(Value)
+        Settings.HaltImmunity = Value
+        if Value then
+            Library:Notify({Title = "Halt Immunity", Description = "Halt cannot harm you!", Time = 3})
+        end
+    end
+})
+
+ProtectionGroup:AddToggle("FigureImmunity", {
+    Text = "Anti Figure",
+    Default = false,
+    Callback = function(Value)
+        Settings.FigureImmunity = Value
+        if Value then
+            Library:Notify({Title = "Figure Immunity", Description = "Figure cannot harm you!", Time = 3})
+        end
+    end
+})
+
+local DamageGroup = Tabs.Exploits:AddRightGroupbox("Damage Control", "heart-cross")
+
+DamageGroup:AddToggle("GodMode", {
+    Text = "God Mode",
+    Default = false,
+    Callback = function(Value)
+        Settings.GodMode = Value
+        if Value then
+            task.spawn(function()
+                while Settings.GodMode and LocalPlayer.Character do
+                    local hum = LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
+                    if hum then
+                        hum.MaxHealth = 999999
+                        hum.Health = 999999
+                    end
+                    task.wait()
+                end
+            end)
+            Library:Notify({Title = "God Mode", Description = "Invincibility activated!", Time = 3})
+        else
+            if LocalPlayer.Character then
+                local hum = LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
+                if hum then
+                    hum.MaxHealth = 100
+                end
+            end
+        end
+    end
+})
+
+DamageGroup:AddSlider("HealthSet", {
+    Text = "Set Health",
+    Default = 100,
+    Min = 1,
+    Max = 1000,
+    Rounding = 0,
+    Callback = function(Value)
+        if LocalPlayer.Character then
+            local hum = LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
+            if hum then
+                hum.Health = Value
+                hum.MaxHealth = Value
+            end
+        end
+    end
+})
+
+DamageGroup:AddButton({
+    Text = "Revive",
+    Callback = function()
+        if LocalPlayer.Character then
+            LocalPlayer.Character:BreakJoints()
+            task.wait()
+            LocalPlayer.Character:LoadCharacter()
+            Library:Notify({Title = "Revived", Description = "You have been revived!", Time = 3})
+        end
+    end
+})
+
+-- ═══════════════════════════════════════════════════════════
+-- TELEPORT TAB
+-- ═══════════════════════════════════════════════════════════
+
+local TeleportGroup = Tabs.Teleport:AddLeftGroupbox("Quick Teleport", "map")
+
+TeleportGroup:AddButton({
+    Text = "Lobby",
+    Callback = function()
+        if LocalPlayer.Character then
+            LocalPlayer.Character:SetPrimaryPartCFrame(CFrame.new(-10, 3, 0))
+            Library:Notify({Title = "Teleported", Description = "To lobby", Time = 2})
+        end
+    end
+})
+
+TeleportGroup:AddButton({
+    Text = "Latest Room",
+    Callback = function()
+        local CurrentRoom = getCurrentRoom()
+        if CurrentRoom and CurrentRoom.PrimaryPart and LocalPlayer.Character then
+            LocalPlayer.Character:SetPrimaryPartCFrame(CurrentRoom.PrimaryPart.CFrame + Vector3.new(0, 5, 0))
+            Library:Notify({Title = "Teleported", Description = "To latest room", Time = 2})
+        end
+    end
+})
+
+-- ═══════════════════════════════════════════════════════════
+-- COMBAT TAB
+-- ═══════════════════════════════════════════════════════════
+
+local CombatGroup = Tabs.Combat:AddLeftGroupbox("Combat", "sword")
+
+CombatGroup:AddToggle("InstantKill", {
+    Text = "Instant Kill (All)",
+    Default = false,
+    Callback = function(Value)
+        Settings.InstantKill = Value
+        if Value then
+            Library:Notify({Title = "Instant Kill", Description = "All entities will die instantly!", Time = 3})
+        end
+    end
+})
+
+CombatGroup:AddToggle("OnePunch", {
+    Text = "One Punch",
+    Default = false,
+    Callback = function(Value)
+        Settings.OnePunch = Value
+        if Value then
+            Library:Notify({Title = "One Punch", Description = "Kill with one hit!", Time = 3})
+        end
+    end
+})
+
+CombatGroup:AddToggle("NoCooldown", {
+    Text = "No Ability Cooldown",
+    Default = false,
+    Callback = function(Value)
+        Settings.NoCooldown = Value
+        if Value then
+            Library:Notify({Title = "No Cooldown", Description = "Abilities have no cooldown!", Time = 3})
+        end
+    end
 })
 
 -- ═══════════════════════════════════════════════════════════
@@ -1692,121 +1897,53 @@ end
 -- Initialize comprehensive Eyes protection
 setupComprehensiveEyesProtection()
 
--- ULTRA AGGRESSIVE ESP CLEANUP - Maximum cleanup power
+-- NUCLEAR OPTION - Complete ESP cleanup every frame
 task.spawn(function()
     while true do
-        task.wait(0.3) -- Every 300ms - ultra aggressive
+        task.wait(0.1) -- Every 100ms - NUCLEAR
 
         if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            local playerPos = LocalPlayer.Character.HumanoidRootPart.Position
             local CurrentRoom = getCurrentRoom()
 
-            -- SCORCHED EARTH POLICY - Clean up everything not in current room
-            for instance, data in pairs(ESPRegistry) do
-                if instance and instance.Parent then
-                    -- Check if this ESP target is actually in the current room
-                    local inCurrentRoom = false
-                    local parent = instance.Parent
-
-                    -- Traverse up to find if it's in current room
-                    while parent and parent ~= game and parent ~= workspace do
-                        if parent == CurrentRoom then
-                            inCurrentRoom = true
-                            break
-                        end
-                        parent = parent.Parent
+            -- WIPE ALL ESP NOT IN CURRENT ROOM
+            local function isInCurrentRoom(item)
+                if not CurrentRoom then return true end
+                local parent = item.Parent
+                while parent and parent ~= game and parent ~= workspace do
+                    if parent == CurrentRoom then
+                        return true
                     end
-
-                    -- If not in current room and not a persistent entity, REMOVE IT
-                    if not inCurrentRoom then
-                        -- Keep entity ESP (Rush, Ambush, Eyes) but remove everything else
-                        local isEntity = false
-                        if data.espType == "Entity" then
-                            isEntity = true
-                        end
-
-                        if not isEntity then
-                            ClearESP(instance)
-                        end
-                    end
+                    parent = parent.Parent
                 end
+                return false
             end
-        end
-    end
-end)
 
--- BOUNTY HUNTER - Specifically hunt down wardrobe and gold ESP
-task.spawn(function()
-    while true do
-        task.wait(0.5)
-
-        -- Hunt all wardrobes in workspace
-        for _, wardrobe in pairs(Workspace:GetDescendants()) do
-            if wardrobe.Name:lower():find("wardrobe") or wardrobe.Name:lower():find("closet") then
-                if wardrobe:FindFirstChildWhichIsA("Highlight") or wardrobe:FindFirstChild("ESPBillboard") then
-                    -- Check if in current room
-                    local CurrentRoom = getCurrentRoom()
-                    local inCurrentRoom = false
-
-                    if CurrentRoom then
-                        local parent = wardrobe.Parent
-                        while parent and parent ~= game and parent ~= workspace do
-                            if parent == CurrentRoom then
-                                inCurrentRoom = true
-                                break
-                            end
-                            parent = parent.Parent
-                        end
-                    end
-
-                    -- If not in current room, DESTROY THE ESP
-                    if not inCurrentRoom then
-                        -- More aggressive removal
-                        local highlight = wardrobe:FindFirstChildWhichIsA("Highlight")
-                        if highlight then
-                            highlight:Destroy()
-                        end
-                        local billboard = wardrobe:FindFirstChild("ESPBillboard")
-                        if billboard then
-                            billboard:Destroy()
-                        end
-                        -- Remove from registry too
-                        ESPRegistry[wardrobe] = nil
-                    end
+            -- Direct workspace scan for ALL ESP elements
+            for _, item in pairs(Workspace:GetDescendants()) do
+                -- Check for ANY ESP element
+                local hasESP = false
+                if item:FindFirstChildWhichIsA("Highlight") or
+                   item:FindFirstChild("ESPBillboard") or
+                   item:FindFirstChild("ESPLabel") then
+                    hasESP = true
                 end
-            end
-        end
 
-        -- Hunt all gold items
-        for _, gold in pairs(Workspace:GetDescendants()) do
-            if gold.Name:lower():find("gold") or gold.Name:lower():find("coin") then
-                if gold:FindFirstChildWhichIsA("Highlight") or gold:FindFirstChild("ESPBillboard") then
-                    -- Check if in current room
-                    local CurrentRoom = getCurrentRoom()
-                    local inCurrentRoom = false
+                -- If it has ESP and is not in current room, NUKE IT
+                if hasESP and not isInCurrentRoom(item) then
+                    -- Keep entities but destroy everything else
+                    local isEntity = item.Name:lower():find("rush") or
+                                  item.Name:lower():find("ambush") or
+                                  item.Name:lower():find("eyes") or
+                                  item.Name:lower():find("screech")
 
-                    if CurrentRoom then
-                        local parent = gold.Parent
-                        while parent and parent ~= game and parent ~= workspace do
-                            if parent == CurrentRoom then
-                                inCurrentRoom = true
-                                break
+                    if not isEntity then
+                        -- DESTROY EVERYTHING
+                        for _, child in pairs(item:GetChildren()) do
+                            if child:IsA("Highlight") or child:IsA("BillboardGui") or child.Name:find("ESP") then
+                                child:Destroy()
                             end
-                            parent = parent.Parent
                         end
-                    end
-
-                    -- If not in current room, DESTROY THE ESP
-                    if not inCurrentRoom then
-                        local highlight = gold:FindFirstChildWhichIsA("Highlight")
-                        if highlight then
-                            highlight:Destroy()
-                        end
-                        local billboard = gold:FindFirstChild("ESPBillboard")
-                        if billboard then
-                            billboard:Destroy()
-                        end
-                        ESPRegistry[gold] = nil
+                        ESPRegistry[item] = nil
                     end
                 end
             end
