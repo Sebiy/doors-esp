@@ -1624,6 +1624,60 @@ end
 -- Initialize comprehensive Eyes protection
 setupComprehensiveEyesProtection()
 
+-- AGGRESSIVE ESP CLEANUP - Remove ESP from old rooms
+task.spawn(function()
+    while true do
+        task.wait(1) -- Check every second
+
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local playerPos = LocalPlayer.Character.HumanoidRootPart.Position
+            local CurrentRoom = getCurrentRoom()
+
+            -- Clean up ESP from items/entities that are too far
+            for instance, data in pairs(ESPRegistry) do
+                if instance and instance.Parent then
+                    -- Get position of the ESP target
+                    local targetPos = nil
+                    if instance:IsA("BasePart") then
+                        targetPos = instance.Position
+                    elseif instance:IsA("Model") and instance.PrimaryPart then
+                        targetPos = instance.PrimaryPart.Position
+                    elseif data.position then
+                        targetPos = data.position
+                    end
+
+                    if targetPos then
+                        local distance = (playerPos - targetPos).Magnitude
+
+                        -- Remove ESP if too far away (> 150 studs)
+                        if distance > 150 then
+                            ClearESP(instance)
+                            continue
+                        end
+
+                        -- Also check if it's in a room we've passed
+                        if CurrentRoom then
+                            local instanceRoom = GetRoomName(instance)
+                            if instanceRoom then
+                                local currentRoomNum = tonumber(CurrentRoom.Name:match("%d+")) or 0
+                                local instanceRoomNum = tonumber(instanceRoom:match("%d+")) or 0
+
+                                -- Remove if we're more than 2 rooms ahead
+                                if currentRoomNum - instanceRoomNum > 2 then
+                                    ClearESP(instance)
+                                end
+                            end
+                        end
+                    end
+                else
+                    -- Remove orphaned ESP
+                    ClearESP(instance)
+                end
+            end
+        end
+    end
+end)
+
 -- Screech protection (safe check)
 task.spawn(function()
     while true do
