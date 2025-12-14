@@ -1282,224 +1282,124 @@ RunService.Heartbeat:Connect(function()
     local ambush = Workspace:FindFirstChild("AmbushMoving")
     if ambush then SetupEntityESP(ambush, "AMBUSH", Color3.fromRGB(255, 100, 0)) end
     
-    -- ULTIMATE EYES PROTECTION - Multi-layer system for complete immunity
+    -- Simple Eyes ESP (protection handled by setupOriginalEyesDetection)
     local eyes = Workspace:FindFirstChild("Eyes")
-    if eyes then
-        if Settings.ScreechProtection then
-            WaveDebug.info("EYES FOUND - Applying ULTIMATE protection system")
-
-            -- MARK EYES AS PROTECTED
-            if not eyes:GetAttribute("VesperProtected") then
-                eyes:SetAttribute("VesperProtected", true)
-
-                -- LAYER 1: INFINITE HEALTH & DAMAGE IMMUNITY
-                if LocalPlayer.Character then
-                    local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-                    if hum then
-                        hum.MaxHealth = 999999
-                        hum.Health = 999999
-                        WaveDebug.info("Set player health to INVINCIBLE")
-                    end
-                end
-
-                -- LAYER 2: COMPLETE REMOTE EVENT BLOCKING
-                local ReplicatedStorage = game:GetService("ReplicatedStorage")
-                local RemotesFolder = ReplicatedStorage:FindFirstChild("RemotesFolder")
-
-                if RemotesFolder then
-                    for _, remote in pairs(RemotesFolder:GetChildren()) do
-                        if remote:IsA("RemoteEvent") then
-                            local originalEvent = remote.OnClientEvent
-                            remote.OnClientEvent = function(...)
-                                local args = {...}
-                                -- BLOCK ALL DAMAGE EVENTS
-                                if args[1] then
-                                    local arg1 = tostring(args[1]):lower()
-                                    if arg1:find("damage") or arg1:find("hurt") or arg1:find("kill") or arg1:find("eyes") or arg1:find("jumpscare") then
-                                        WaveDebug.debug("BLOCKED damage event: " .. tostring(args[1]))
-                                        return -- COMPLETELY BLOCK
-                                    end
-                                end
-                                -- Allow other events through
-                                return originalEvent:Fire(...)
-                            end
-                        end
-                    end
-                    WaveDebug.info("RemoteEvent damage blocking - ACTIVATED")
-                end
-
-                -- LAYER 3: INSTANT HEALING LOOP (every frame)
-                task.spawn(function()
-                    while eyes and eyes.Parent and Settings.ScreechProtection do
-                        if LocalPlayer.Character then
-                            local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-                            if hum then
-                                hum.Health = 999999
-                                hum.MaxHealth = 999999
-                            end
-                        end
-                        task.wait()
-                    end
-                end)
-
-                -- LAYER 4: DESTROY ALL DAMAGE-CAUSING PARTS
-                local damagePartsDestroyed = 0
-                for _, part in pairs(eyes:GetDescendants()) do
-                    if part:IsA("BasePart") and (
-                        part.Name:find("Damage") or part.Name:find("Kill") or
-                        part.Name:find("Hurt") or part.Name:find("Trigger") or
-                        part.Name:find("Hitbox") or part.Name:find("Collision")
-                    ) then
-                        pcall(function()
-                            part:Destroy()
-                            damagePartsDestroyed = damagePartsDestroyed + 1
-                        end)
-                    end
-                end
-
-                -- LAYER 5: REMOVE ALL DAMAGE SCRIPTS
-                local scriptsDestroyed = 0
-                for _, script in pairs(eyes:GetDescendants()) do
-                    if script:IsA("Script") or script:IsA("LocalScript") then
-                        pcall(function()
-                            script.Disabled = true
-                            script:Destroy()
-                            scriptsDestroyed = scriptsDestroyed + 1
-                        end)
-                    end
-                end
-
-                WaveDebug.info("Eyes protection: " .. damagePartsDestroyed .. " parts destroyed, " .. scriptsDestroyed .. " scripts destroyed")
-
-                -- LAYER 6: CAMERA PROTECTION - prevent FOV manipulation
-                local cam = workspace.CurrentCamera
-                if cam then
-                    task.spawn(function()
-                        while eyes and eyes.Parent and Settings.ScreechProtection do
-                            cam.FieldOfView = math.clamp(cam.FieldOfView, 60, 90)
-                            task.wait(0.1)
-                        end
-                    end)
-                end
-
-                WaveDebug.info("ULTIMATE Eyes protection - ALL LAYERS ACTIVE")
-            end
-
-            -- Apply ESP to warn about Eyes
-            if not HasESP(eyes) then
-                SetupEntityESP(eyes, "EYES (INVINCIBLE)", Color3.fromRGB(255, 255, 0))
-            end
-
-            -- Notification
-            local currentTime = tick()
-            if currentTime - LastEyesNotification > 5 then
-                LastEyesNotification = currentTime
-                if Settings.EntityNotify then
-                    Library:Notify({Title = "🛡️ EYES INVISIBLE", Description = "Protection 100% active", Time = 3})
-                end
-            end
-        else
-            SetupEntityESP(eyes, "EYES", Color3.fromRGB(255, 255, 0))
-        end
+    if eyes and not eyes:GetAttribute("ESPAdded") then
+        SetupEntityESP(eyes, "EYES", Color3.fromRGB(255, 255, 0))
     end
 end)
 
--- Eyes spawn detection (ULTIMATE PROTECTION on spawn)
-Workspace.ChildAdded:Connect(function(child)
-    if child.Name == "Eyes" and Settings.ScreechProtection then
-        task.wait(0.1) -- Let it spawn
-        WaveDebug.info("EYES SPAWNED - Applying ultimate protection immediately")
+-- Eyes spawn detection is handled by setupOriginalEyesDetection() function
 
-        -- MARK AS PROTECTED
-        child:SetAttribute("VesperProtected", true)
-
-        -- SPAWN PROTECTION: Destroy all damage components immediately
-        local partsDestroyed = 0
-        local scriptsDestroyed = 0
-
-        for _, part in pairs(child:GetDescendants()) do
-            if part:IsA("BasePart") and (
-                part.Name:find("Damage") or part.Name:find("Kill") or
-                part.Name:find("Hurt") or part.Name:find("Trigger") or
-                part.Name:find("Hitbox") or part.Name:find("Collision")
-            ) then
-                pcall(function()
-                    part:Destroy()
-                    partsDestroyed = partsDestroyed + 1
-                end)
-            end
-        end
-
-        for _, script in pairs(child:GetDescendants()) do
-            if script:IsA("Script") or script:IsA("LocalScript") then
-                pcall(function()
-                    script.Disabled = true
-                    script:Destroy()
-                    scriptsDestroyed = scriptsDestroyed + 1
-                end)
-            end
-        end
-
-        WaveDebug.info("Spawn protection: " .. partsDestroyed .. " parts, " .. scriptsDestroyed .. " scripts destroyed")
-
-        -- Apply ESP to protected Eyes
-        if not HasESP(child) then
-            SetupEntityESP(child, "EYES (IMMUNE)", Color3.fromRGB(255, 255, 0))
-        end
-
-        -- Notification
-        if Settings.EntityNotify then
-            Library:Notify({Title = "👁️ EYES NEUTRALIZED", Description = "Damage systems destroyed", Time = 3})
-        end
-    end
-end)
-
--- CONTINUOUS ULTIMATE PROTECTION - Multiple layers always active
-task.spawn(function()
-    while true do
-        task.wait(0.1) -- Check every 100ms for maximum protection
-
-        if Settings.ScreechProtection and LocalPlayer.Character then
+-- ORIGINAL ANTI-EYES SYSTEM - Makes Eyes visible but harmless (blurred effect)
+local function setupOriginalEyesDetection()
+    local function protectPlayerFromEyes()
+        if LocalPlayer.Character and Settings.ScreechProtection then
             local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
             if hum then
-                -- MAINTAIN INVINCIBLE HEALTH
-                hum.MaxHealth = 999999
-                hum.Health = 999999
-
-                -- SCAN FOR ANY EYES THAT NEED PROTECTION
+                -- Keep player healthy when Eyes exists
                 local eyes = Workspace:FindFirstChild("Eyes")
                 if eyes then
-                    -- CONTINUOUSLY DESTROY ANY NEW DAMAGE PARTS
-                    for _, part in pairs(eyes:GetDescendants()) do
-                        if part:IsA("BasePart") and (
-                            part.Name:find("Damage") or part.Name:find("Kill") or
-                            part.Name:find("Hurt") or part.Name:find("Trigger") or
-                            part.Name:find("Hitbox") or part.Name:find("Collision")
-                        ) then
-                            pcall(function() part:Destroy() end)
-                        end
+                    hum.MaxHealth = 100
+                    if hum.Health < 100 then
+                        hum.Health = 100
                     end
-
-                    -- CONTINUOUSLY DESTROY ANY NEW SCRIPTS
-                    for _, script in pairs(eyes:GetDescendants()) do
-                        if script:IsA("Script") or script:IsA("LocalScript") then
-                            pcall(function()
-                                script.Disabled = true
-                                script:Destroy()
-                            end)
-                        end
-                    end
-                end
-
-                -- PREVENT ANY OTHER DAMAGE
-                if hum.Health < 999999 then
-                    hum.Health = 999999
-                    WaveDebug.warn("Damage detected - INSTANTLY healed to invincible!")
                 end
             end
         end
     end
-end)
+
+    -- Continuous protection (every frame)
+    RunService.Heartbeat:Connect(protectPlayerFromEyes)
+
+    -- Eyes spawn detection with blur effect
+    Workspace.ChildAdded:Connect(function(child)
+        if child.Name == "Eyes" and Settings.ScreechProtection then
+            if Settings.EntityNotify then
+                Library:Notify({Title = "👁️ EYES SPAWNED", Description = "Eyes detected - damage disabled!", Time = 4})
+            end
+        end
+    end)
+
+    -- Eyes ESP with blur effect (visible but harmless)
+    local function checkForEyes()
+        local EyesModel = Workspace:FindFirstChild("Eyes")
+        if EyesModel and not EyesModel:GetAttribute("ESPAdded") then
+            local eyesColor = Color3.fromRGB(255, 255, 0)
+            task.spawn(function()
+                EyesModel:SetAttribute("ESPAdded", true)
+
+                if Settings.EntityNotify then
+                    Library:Notify({Title = "👁️ EYES DETECTED", Description = "Eyes entity neutralized - no damage!", Time = 4})
+                end
+
+                if not Settings.EntityESP then return end
+
+                -- Add ESP highlight
+                local highlight = Instance.new("Highlight")
+                highlight:SetAttribute("EyesESP", true)
+                highlight.Adornee = EyesModel
+                highlight.FillColor = eyesColor
+                highlight.OutlineColor = Color3.new(1, 1, 0)
+                highlight.FillTransparency = 0.3 -- Slightly transparent for blur effect
+                highlight.OutlineTransparency = 0.2
+                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                highlight.Parent = EyesModel
+
+                -- Add Billboard GUI
+                local billboard = Instance.new("BillboardGui")
+                billboard:SetAttribute("EyesESP", true)
+                billboard.Adornee = EyesModel
+                billboard.Size = UDim2.new(0, 200, 0, 50)
+                billboard.StudsOffset = Vector3.new(0, 5, 0)
+                billboard.AlwaysOnTop = true
+                billboard.Parent = EyesModel
+
+                local textLabel = Instance.new("TextLabel")
+                textLabel.Size = UDim2.new(1, 0, 1, 0)
+                textLabel.BackgroundTransparency = 1
+                textLabel.TextColor3 = eyesColor
+                textLabel.TextStrokeTransparency = 0.2
+                textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+                textLabel.TextScaled = true
+                textLabel.Font = Enum.Font.GothamBold
+                textLabel.Parent = billboard
+
+                -- Main loop for Eyes ESP and protection
+                while EyesModel and EyesModel.Parent do
+                    pcall(function()
+                        -- Update distance display
+                        local playerPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position
+                        if playerPos then
+                            local eyesPos = EyesModel:GetPivot().Position
+                            local distance = (playerPos - eyesPos).Magnitude
+                            textLabel.Text = "👁️ EYES - " .. math.floor(distance) .. " studs (Safe)"
+                        end
+
+                        -- Continuous protection
+                        if Settings.ScreechProtection and LocalPlayer.Character then
+                            local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+                            if hum and hum.Health < 100 then
+                                hum.Health = 100
+                            end
+                        end
+                    end)
+                    task.wait(0.1)
+                end
+
+                -- Clean up when Eyes despawns
+                if highlight then highlight:Destroy() end
+                if billboard then billboard:Destroy() end
+                warn("Eyes despawned - ESP cleaned up")
+            end)
+        end
+    end
+
+    RunService.Heartbeat:Connect(checkForEyes)
+end
+
+-- Initialize the original working Eyes system
+setupOriginalEyesDetection()
 
 -- Screech protection (safe check)
 task.spawn(function()
