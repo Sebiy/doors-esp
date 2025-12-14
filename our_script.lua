@@ -1364,87 +1364,89 @@ setupEntityDetection()
 
 -- Eyes spawn detection is handled by setupOriginalEyesDetection() function
 
--- ORIGINAL WORKING EYES SYSTEM - Destroys eye models, keeps colored background
+-- ORIGINAL WORKING EYES SYSTEM - Simple but effective (based on early commit)
 local function setupOriginalEyesDetection()
-    local function destroyEyesDamage()
+    local eyesProcessed = false
+
+    -- Simple anti-eyes damage (based on original working commit)
+    local function preventEyesDamage()
         local eyes = Workspace:FindFirstChild("Eyes")
-        if eyes and Settings.ScreechProtection then
-            warn("👁️ Eyes found - destroying eye models and damage components!")
+        if eyes and Settings.ScreechProtection and not eyesProcessed then
+            eyesProcessed = true
+            warn("👁️ Eyes found - applying original protection!")
 
-            -- Method 1: Delete all scripts inside Eyes
-            for _, v in pairs(eyes:GetDescendants()) do
-                if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("ModuleScript") then
-                    v:Destroy()
-                end
-            end
-
-            -- Method 2: Delete eye model parts and damage parts
-            local partsToRemove = {"Core", "Main", "DamagePart", "Hitbox", "MeshPart", "EyeL", "EyeR", "Eyeball", "Pupil", "Iris"}
-            for _, partName in pairs(partsToRemove) do
+            -- Only remove eye detail parts, keep the main entity visible
+            local eyeDetailParts = {"Eyeball", "Pupil", "Iris", "EyeL", "EyeR", "EyeMesh"}
+            for _, partName in pairs(eyeDetailParts) do
                 local part = eyes:FindFirstChild(partName, true)
-                if part then
+                if part and part:IsA("BasePart") then
                     part:Destroy()
                 end
             end
 
-            -- Method 3: Destroy any parts with "eye" in the name
-            for _, part in pairs(eyes:GetDescendants()) do
-                if part:IsA("BasePart") and (part.Name:lower():find("eye") or part.Name:lower():find("pupil") or part.Name:lower():find("iris")) then
-                    part:Destroy()
-                end
-            end
-
-            -- Method 4: Remove any screen shake effects
+            -- Remove only the eye mesh/details, not the entire parts
             for _, obj in pairs(eyes:GetDescendants()) do
-                if obj:IsA("Camera") or obj.Name:lower():find("shake") or obj.Name:lower():find("screen") then
-                    obj:Destroy()
+                if obj:IsA("BasePart") and (obj.Name:lower():find("eyeball") or obj.Name:lower():find("pupil") or obj.Name:lower():find("iris")) then
+                    if obj:FindFirstChild("Mesh") then
+                        obj.Mesh:Destroy()
+                    end
+                end
+            end
+
+            -- Prevent death (original method)
+            if LocalPlayer.Character then
+                local humanoid = LocalPlayer.Character:FindFirstChild("Humanoid")
+                if humanoid then
+                    humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
                 end
             end
 
             if Settings.EntityNotify then
-                Library:Notify({Title = "👁️ EYES NEUTRALIZED", Description = "Eye models removed - only colors remain!", Time = 3})
+                Library:Notify({Title = "👁️ EYES DETECTED", Description = "Eye details removed - harmless!", Time = 3})
             end
+
+            -- Reset after a delay
+            task.delay(2, function()
+                eyesProcessed = false
+            end)
         end
     end
 
-    -- Ultra-fast monitoring (every frame)
-    RunService.Heartbeat:Connect(function()
-        if Settings.ScreechProtection then
-            destroyEyesDamage()
+    -- Simple monitoring (not every frame to prevent spam)
+    task.spawn(function()
+        while true do
+            if Settings.ScreechProtection then
+                preventEyesDamage()
+            end
+            task.wait(0.5) -- Check every 0.5 seconds instead of every frame
         end
     end)
 
-    -- Instant detection on spawn
+    -- Simple spawn detection
     Workspace.ChildAdded:Connect(function(child)
         if child.Name == "Eyes" and Settings.ScreechProtection then
-            task.wait(0.1) -- Let it spawn first
-            destroyEyesDamage()
-            warn("👁️ Eyes spawn blocked - models destroyed!")
+            task.wait(0.2) -- Let it spawn
+            preventEyesDamage()
         end
     end)
 
-    -- ESP for Eyes (only shows colored background)
-    local function checkForEyesESP()
+    -- Simple ESP without complex loops
+    local function checkForEyes()
         local EyesModel = Workspace:FindFirstChild("Eyes")
         if EyesModel and not EyesModel:GetAttribute("ESPAdded") then
             EyesModel:SetAttribute("ESPAdded", true)
-
-            if Settings.EntityNotify then
-                Library:Notify({Title = "👁️ EYES DETECTED", Description = "Eyes models destroyed - harmless colors only!", Time = 4})
-            end
 
             if not Settings.EntityESP then return end
 
             local eyesColor = Color3.fromRGB(255, 255, 0)
 
-            -- Create ESP for the remaining colored parts
             local highlight = Instance.new("Highlight")
             highlight:SetAttribute("EyesESP", true)
             highlight.Adornee = EyesModel
             highlight.FillColor = eyesColor
             highlight.OutlineColor = Color3.new(1, 1, 0)
-            highlight.FillTransparency = 0.2 -- Very transparent to show colors behind
-            highlight.OutlineTransparency = 0.1
+            highlight.FillTransparency = 0.3
+            highlight.OutlineTransparency = 0
             highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
             highlight.Parent = EyesModel
 
@@ -1466,31 +1468,28 @@ local function setupOriginalEyesDetection()
             textLabel.Font = Enum.Font.GothamBold
             textLabel.Parent = billboard
 
+            -- Simple update loop without continuous processing
             task.spawn(function()
                 while EyesModel and EyesModel.Parent do
                     pcall(function()
-                        local playerPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position
-                        if playerPos then
-                            local eyesPos = EyesModel:GetPivot().Position
-                            local distance = (playerPos - eyesPos).Magnitude
-                            textLabel.Text = "👁️ EYES - " .. math.floor(distance) .. " studs (Harmless)"
+                        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            local pos = EyesModel:GetPivot().Position
+                            local dist = math.floor((hrp.Position - pos).Magnitude)
+                            textLabel.Text = "👁️ EYES - " .. dist .. " studs"
                         end
-
-                        -- Keep destroying any eye parts that respawn
-                        destroyEyesDamage()
                     end)
-                    task.wait(0.1)
+                    task.wait(0.5)
                 end
 
-                -- Clean up when Eyes despawns
+                -- Clean up
                 if highlight then highlight:Destroy() end
                 if billboard then billboard:Destroy() end
-                warn("Eyes despawned - ESP cleaned up")
             end)
         end
     end
 
-    RunService.Heartbeat:Connect(checkForEyesESP)
+    RunService.Heartbeat:Connect(checkForEyes)
 end
 
 -- Initialize the original working Eyes system
