@@ -617,12 +617,18 @@ local Toggles = Library.Toggles
 
 local Window = Library:CreateWindow({
     Title = "vesper.lua",
-    Footer = "version: v2.0 | clean rewrite",
+    Footer = "version: v2.1 | latest obsidian-ui v0.12.0",
     Icon = "rbxassetid://87962219786952",
     NotifySide = "Right",
     ShowCustomCursor = true,
     Center = true,
     AutoShow = true,
+    Config = {
+        SaveSettings = true,
+        SaveKeybinds = true,
+        NoKeybindNotification = false,
+        KeybindSound = true
+    }
 })
 
 local Tabs = {
@@ -760,6 +766,68 @@ AuraGroup:AddToggle("LockedDoorAura", {
     Text = "Locked Door Aura",
     Default = false,
     Callback = function(Value) Settings.LockedDoorAura = Value end
+})
+
+-- New Features Group
+local FeaturesGroup = Tabs.Main:AddRightGroupbox("New Features", "star")
+
+FeaturesGroup:AddButton({
+    Text = "Clear All ESP",
+    Callback = function()
+        for instance, data in pairs(ESPRegistry) do
+            ClearESP(instance)
+        end
+        ESPRegistry = {}
+        Library:Notify({Title = "ESP Cleared", Description = "All ESP has been removed", Time = 2})
+    end
+})
+
+FeaturesGroup:AddToggle("ShowFPS", {
+    Text = "Show FPS Counter",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            local fpsGui = Instance.new("ScreenGui")
+            fpsGui.Name = "FPSCounter"
+            fpsGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+            fpsGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+            local label = Instance.new("TextLabel")
+            label.Size = UDim2.new(0, 100, 0, 30)
+            label.Position = UDim2.new(0, 10, 1, -40)
+            label.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+            label.BorderSizePixel = 1
+            label.BorderColor3 = Color3.fromRGB(255, 255, 255)
+            label.TextColor3 = Color3.new(1, 1, 1)
+            label.TextScaled = true
+            label.Font = Enum.Font.Code
+            label.Parent = fpsGui
+
+            local lastTime = tick()
+            local frames = 0
+
+            game:GetService("RunService").Heartbeat:Connect(function()
+                frames = frames + 1
+                local currentTime = tick()
+                if currentTime - lastTime >= 1 then
+                    label.Text = "FPS: " .. frames
+                    frames = 0
+                    lastTime = currentTime
+                end
+            end)
+
+            fpsGui:GetPropertyChangedSignal("Parent"):Connect(function()
+                if not fpsGui.Parent then
+                    FeaturesGroup.Toggles["ShowFPS"]:SetValue(false)
+                end
+            end)
+        else
+            local fpsGui = LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("FPSCounter")
+            if fpsGui then
+                fpsGui:Destroy()
+            end
+        end
+    end
 })
 
 -- ═══════════════════════════════════════════════════════════
@@ -1624,121 +1692,61 @@ end
 -- Initialize comprehensive Eyes protection
 setupComprehensiveEyesProtection()
 
--- SUPER AGGRESSIVE ESP CLEANUP - Specifically for wardrobes and gold
+-- ULTRA AGGRESSIVE ESP CLEANUP - Maximum cleanup power
 task.spawn(function()
     while true do
-        task.wait(0.5) -- Check every half second - more aggressive
+        task.wait(0.3) -- Every 300ms - ultra aggressive
 
         if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
             local playerPos = LocalPlayer.Character.HumanoidRootPart.Position
             local CurrentRoom = getCurrentRoom()
-            local currentRoomNum = 0
 
-            -- Get current room number more reliably
-            if CurrentRoom then
-                currentRoomNum = tonumber(string.match(CurrentRoom.Name, "%d+")) or tonumber(string.match(CurrentRoom.Name, "Room_(%d+)")) or 0
-            end
-
-            -- Clean up ALL ESP items that are in old rooms
+            -- SCORCHED EARTH POLICY - Clean up everything not in current room
             for instance, data in pairs(ESPRegistry) do
                 if instance and instance.Parent then
-                    -- Get position more reliably
-                    local targetPos = nil
-                    local targetName = ""
+                    -- Check if this ESP target is actually in the current room
+                    local inCurrentRoom = false
+                    local parent = instance.Parent
 
-                    -- Try multiple ways to get position
-                    if instance:IsA("BasePart") then
-                        targetPos = instance.Position
-                        targetName = instance.Name
-                    elseif instance:IsA("Model") then
-                        if instance.PrimaryPart then
-                            targetPos = instance.PrimaryPart.Position
-                        else
-                            -- Try to find any BasePart in the model
-                            for _, part in pairs(instance:GetDescendants()) do
-                                if part:IsA("BasePart") then
-                                    targetPos = part.Position
-                                    break
-                                end
-                            end
+                    -- Traverse up to find if it's in current room
+                    while parent and parent ~= game and parent ~= workspace do
+                        if parent == CurrentRoom then
+                            inCurrentRoom = true
+                            break
                         end
-                        targetName = instance.Name
+                        parent = parent.Parent
                     end
 
-                    -- If we have a position, check if it should be removed
-                    if targetPos then
-                        local distance = (playerPos - targetPos).Magnitude
-
-                        -- Get room number for this item
-                        local instanceRoom = instance.Parent
-                        local instanceRoomNum = 0
-
-                        -- Try to find room number by going up the hierarchy
-                        local parent = instance.Parent
-                        while parent and parent ~= game and parent ~= workspace do
-                            local roomMatch = string.match(parent.Name, "%d+")
-                            if roomMatch then
-                                instanceRoomNum = tonumber(roomMatch)
-                                break
-                            end
-                            parent = parent.Parent
+                    -- If not in current room and not a persistent entity, REMOVE IT
+                    if not inCurrentRoom then
+                        -- Keep entity ESP (Rush, Ambush, Eyes) but remove everything else
+                        local isEntity = false
+                        if data.espType == "Entity" then
+                            isEntity = true
                         end
 
-                        -- AGGRESSIVE CLEANUP RULES:
-
-                        -- Rule 1: Remove ALL wardrobe and gold ESP from previous rooms
-                        if string.find(targetName:lower(), "wardrobe") or string.find(targetName:lower(), "gold") then
-                            if instanceRoomNum > 0 and currentRoomNum > 0 and instanceRoomNum < currentRoomNum then
-                                -- This is a wardrobe/gold from a previous room - REMOVE IT
-                                ClearESP(instance)
-                                continue
-                            end
-                        end
-
-                        -- Rule 2: Remove if too far away (> 80 studs instead of 150)
-                        if distance > 80 then
+                        if not isEntity then
                             ClearESP(instance)
-                            continue
                         end
-
-                        -- Rule 3: Remove if more than 1 room behind (more aggressive)
-                        if instanceRoomNum > 0 and currentRoomNum > 0 and (currentRoomNum - instanceRoomNum) > 1 then
-                            ClearESP(instance)
-                            continue
-                        end
-
-                        -- Rule 4: Special case for wardrobes - be even more aggressive
-                        if string.find(targetName:lower(), "wardrobe") then
-                            -- Remove wardrobes from rooms behind us even if close
-                            if instanceRoomNum > 0 and currentRoomNum > 0 and instanceRoomNum < currentRoomNum - 1 then
-                                ClearESP(instance)
-                            end
-                        end
-                    else
-                        -- No position found - remove it
-                        ClearESP(instance)
                     end
-                else
-                    -- No parent - remove it
-                    ClearESP(instance)
                 end
             end
         end
     end
 end)
 
--- Additional cleanup specifically for wardrobes
+-- BOUNTY HUNTER - Specifically hunt down wardrobe and gold ESP
 task.spawn(function()
     while true do
-        task.wait(1) -- Every second
+        task.wait(0.5)
 
-        -- Find all wardrobes with ESP and remove if they're not in current room
+        -- Hunt all wardrobes in workspace
         for _, wardrobe in pairs(Workspace:GetDescendants()) do
-            if wardrobe.Name:lower():find("wardrobe") then
-                if wardrobe:FindFirstChild("ESPBillboard") or wardrobe:FindFirstChildWhichIsA("Highlight") then
-                    -- Check if this wardrobe is in the current room
-                    local inCurrentRoom = false
+            if wardrobe.Name:lower():find("wardrobe") or wardrobe.Name:lower():find("closet") then
+                if wardrobe:FindFirstChildWhichIsA("Highlight") or wardrobe:FindFirstChild("ESPBillboard") then
+                    -- Check if in current room
                     local CurrentRoom = getCurrentRoom()
+                    local inCurrentRoom = false
 
                     if CurrentRoom then
                         local parent = wardrobe.Parent
@@ -1751,9 +1759,54 @@ task.spawn(function()
                         end
                     end
 
-                    -- If not in current room, remove ESP
+                    -- If not in current room, DESTROY THE ESP
                     if not inCurrentRoom then
-                        ClearESP(wardrobe)
+                        -- More aggressive removal
+                        local highlight = wardrobe:FindFirstChildWhichIsA("Highlight")
+                        if highlight then
+                            highlight:Destroy()
+                        end
+                        local billboard = wardrobe:FindFirstChild("ESPBillboard")
+                        if billboard then
+                            billboard:Destroy()
+                        end
+                        -- Remove from registry too
+                        ESPRegistry[wardrobe] = nil
+                    end
+                end
+            end
+        end
+
+        -- Hunt all gold items
+        for _, gold in pairs(Workspace:GetDescendants()) do
+            if gold.Name:lower():find("gold") or gold.Name:lower():find("coin") then
+                if gold:FindFirstChildWhichIsA("Highlight") or gold:FindFirstChild("ESPBillboard") then
+                    -- Check if in current room
+                    local CurrentRoom = getCurrentRoom()
+                    local inCurrentRoom = false
+
+                    if CurrentRoom then
+                        local parent = gold.Parent
+                        while parent and parent ~= game and parent ~= workspace do
+                            if parent == CurrentRoom then
+                                inCurrentRoom = true
+                                break
+                            end
+                            parent = parent.Parent
+                        end
+                    end
+
+                    -- If not in current room, DESTROY THE ESP
+                    if not inCurrentRoom then
+                        local highlight = gold:FindFirstChildWhichIsA("Highlight")
+                        if highlight then
+                            highlight:Destroy()
+                        end
+                        local billboard = gold:FindFirstChild("ESPBillboard")
+                        if billboard then
+                            billboard:Destroy()
+                        end
+                        ESPRegistry[gold] = nil
                     end
                 end
             end
