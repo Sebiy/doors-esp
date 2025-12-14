@@ -1355,11 +1355,7 @@ local function setupEntityDetection()
             SetupEntityESP(ambush, "AMBUSH", Color3.fromRGB(255, 100, 0))
         end
 
-        -- Simple Eyes ESP (protection handled by setupOriginalEyesDetection)
-        local eyes = Workspace:FindFirstChild("Eyes")
-        if eyes and not eyes:GetAttribute("ESPAdded") then
-            SetupEntityESP(eyes, "EYES", Color3.fromRGB(255, 255, 0))
-        end
+        -- Eyes ESP is now handled by setupOriginalEyesDetection()
     end)
 end
 
@@ -1368,98 +1364,120 @@ setupEntityDetection()
 
 -- Eyes spawn detection is handled by setupOriginalEyesDetection() function
 
--- ORIGINAL ANTI-EYES SYSTEM - Makes Eyes visible but harmless (blurred effect)
+-- ORIGINAL WORKING EYES SYSTEM - Destroys eye models, keeps colored background
 local function setupOriginalEyesDetection()
-    local function protectPlayerFromEyes()
-        if LocalPlayer.Character and Settings.ScreechProtection then
-            local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-            if hum then
-                -- Keep player healthy when Eyes exists
-                local eyes = Workspace:FindFirstChild("Eyes")
-                if eyes then
-                    hum.MaxHealth = 100
-                    if hum.Health < 100 then
-                        hum.Health = 100
-                    end
+    local function destroyEyesDamage()
+        local eyes = Workspace:FindFirstChild("Eyes")
+        if eyes and Settings.ScreechProtection then
+            warn("👁️ Eyes found - destroying eye models and damage components!")
+
+            -- Method 1: Delete all scripts inside Eyes
+            for _, v in pairs(eyes:GetDescendants()) do
+                if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("ModuleScript") then
+                    v:Destroy()
                 end
+            end
+
+            -- Method 2: Delete eye model parts and damage parts
+            local partsToRemove = {"Core", "Main", "DamagePart", "Hitbox", "MeshPart", "EyeL", "EyeR", "Eyeball", "Pupil", "Iris"}
+            for _, partName in pairs(partsToRemove) do
+                local part = eyes:FindFirstChild(partName, true)
+                if part then
+                    part:Destroy()
+                end
+            end
+
+            -- Method 3: Destroy any parts with "eye" in the name
+            for _, part in pairs(eyes:GetDescendants()) do
+                if part:IsA("BasePart") and (part.Name:lower():find("eye") or part.Name:lower():find("pupil") or part.Name:lower():find("iris")) then
+                    part:Destroy()
+                end
+            end
+
+            -- Method 4: Remove any screen shake effects
+            for _, obj in pairs(eyes:GetDescendants()) do
+                if obj:IsA("Camera") or obj.Name:lower():find("shake") or obj.Name:lower():find("screen") then
+                    obj:Destroy()
+                end
+            end
+
+            if Settings.EntityNotify then
+                Library:Notify({Title = "👁️ EYES NEUTRALIZED", Description = "Eye models removed - only colors remain!", Time = 3})
             end
         end
     end
 
-    -- Continuous protection (every frame)
-    RunService.Heartbeat:Connect(protectPlayerFromEyes)
-
-    -- Eyes spawn detection with blur effect
-    Workspace.ChildAdded:Connect(function(child)
-        if child.Name == "Eyes" and Settings.ScreechProtection then
-            if Settings.EntityNotify then
-                Library:Notify({Title = "👁️ EYES SPAWNED", Description = "Eyes detected - damage disabled!", Time = 4})
-            end
+    -- Ultra-fast monitoring (every frame)
+    RunService.Heartbeat:Connect(function()
+        if Settings.ScreechProtection then
+            destroyEyesDamage()
         end
     end)
 
-    -- Eyes ESP with blur effect (visible but harmless)
-    local function checkForEyes()
+    -- Instant detection on spawn
+    Workspace.ChildAdded:Connect(function(child)
+        if child.Name == "Eyes" and Settings.ScreechProtection then
+            task.wait(0.1) -- Let it spawn first
+            destroyEyesDamage()
+            warn("👁️ Eyes spawn blocked - models destroyed!")
+        end
+    end)
+
+    -- ESP for Eyes (only shows colored background)
+    local function checkForEyesESP()
         local EyesModel = Workspace:FindFirstChild("Eyes")
         if EyesModel and not EyesModel:GetAttribute("ESPAdded") then
+            EyesModel:SetAttribute("ESPAdded", true)
+
+            if Settings.EntityNotify then
+                Library:Notify({Title = "👁️ EYES DETECTED", Description = "Eyes models destroyed - harmless colors only!", Time = 4})
+            end
+
+            if not Settings.EntityESP then return end
+
             local eyesColor = Color3.fromRGB(255, 255, 0)
+
+            -- Create ESP for the remaining colored parts
+            local highlight = Instance.new("Highlight")
+            highlight:SetAttribute("EyesESP", true)
+            highlight.Adornee = EyesModel
+            highlight.FillColor = eyesColor
+            highlight.OutlineColor = Color3.new(1, 1, 0)
+            highlight.FillTransparency = 0.2 -- Very transparent to show colors behind
+            highlight.OutlineTransparency = 0.1
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            highlight.Parent = EyesModel
+
+            local billboard = Instance.new("BillboardGui")
+            billboard:SetAttribute("EyesESP", true)
+            billboard.Adornee = EyesModel
+            billboard.Size = UDim2.new(0, 200, 0, 50)
+            billboard.StudsOffset = Vector3.new(0, 5, 0)
+            billboard.AlwaysOnTop = true
+            billboard.Parent = EyesModel
+
+            local textLabel = Instance.new("TextLabel")
+            textLabel.Size = UDim2.new(1, 0, 1, 0)
+            textLabel.BackgroundTransparency = 1
+            textLabel.TextColor3 = eyesColor
+            textLabel.TextStrokeTransparency = 0.2
+            textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+            textLabel.TextScaled = true
+            textLabel.Font = Enum.Font.GothamBold
+            textLabel.Parent = billboard
+
             task.spawn(function()
-                EyesModel:SetAttribute("ESPAdded", true)
-
-                if Settings.EntityNotify then
-                    Library:Notify({Title = "👁️ EYES DETECTED", Description = "Eyes entity neutralized - no damage!", Time = 4})
-                end
-
-                if not Settings.EntityESP then return end
-
-                -- Add ESP highlight
-                local highlight = Instance.new("Highlight")
-                highlight:SetAttribute("EyesESP", true)
-                highlight.Adornee = EyesModel
-                highlight.FillColor = eyesColor
-                highlight.OutlineColor = Color3.new(1, 1, 0)
-                highlight.FillTransparency = 0.3 -- Slightly transparent for blur effect
-                highlight.OutlineTransparency = 0.2
-                highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                highlight.Parent = EyesModel
-
-                -- Add Billboard GUI
-                local billboard = Instance.new("BillboardGui")
-                billboard:SetAttribute("EyesESP", true)
-                billboard.Adornee = EyesModel
-                billboard.Size = UDim2.new(0, 200, 0, 50)
-                billboard.StudsOffset = Vector3.new(0, 5, 0)
-                billboard.AlwaysOnTop = true
-                billboard.Parent = EyesModel
-
-                local textLabel = Instance.new("TextLabel")
-                textLabel.Size = UDim2.new(1, 0, 1, 0)
-                textLabel.BackgroundTransparency = 1
-                textLabel.TextColor3 = eyesColor
-                textLabel.TextStrokeTransparency = 0.2
-                textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-                textLabel.TextScaled = true
-                textLabel.Font = Enum.Font.GothamBold
-                textLabel.Parent = billboard
-
-                -- Main loop for Eyes ESP and protection
                 while EyesModel and EyesModel.Parent do
                     pcall(function()
-                        -- Update distance display
                         local playerPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position
                         if playerPos then
                             local eyesPos = EyesModel:GetPivot().Position
                             local distance = (playerPos - eyesPos).Magnitude
-                            textLabel.Text = "👁️ EYES - " .. math.floor(distance) .. " studs (Safe)"
+                            textLabel.Text = "👁️ EYES - " .. math.floor(distance) .. " studs (Harmless)"
                         end
 
-                        -- Continuous protection
-                        if Settings.ScreechProtection and LocalPlayer.Character then
-                            local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-                            if hum and hum.Health < 100 then
-                                hum.Health = 100
-                            end
-                        end
+                        -- Keep destroying any eye parts that respawn
+                        destroyEyesDamage()
                     end)
                     task.wait(0.1)
                 end
@@ -1472,7 +1490,7 @@ local function setupOriginalEyesDetection()
         end
     end
 
-    RunService.Heartbeat:Connect(checkForEyes)
+    RunService.Heartbeat:Connect(checkForEyesESP)
 end
 
 -- Initialize the original working Eyes system
