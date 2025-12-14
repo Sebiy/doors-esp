@@ -1364,68 +1364,156 @@ setupEntityDetection()
 
 -- Eyes spawn detection is handled by setupOriginalEyesDetection() function
 
--- TRUE EYES PROTECTION SYSTEM - Based on actual raycast damage mechanics
-local function setupRealEyesProtection()
+-- COMPREHENSIVE EYES PROTECTION - Block ALL damage methods
+local function setupComprehensiveEyesProtection()
     local protected = false
+    local originalMethods = {}
 
-    -- Hook workspace.Raycast to block Eyes detection
-    local workspaceRaycast = workspace.Raycast
+    -- Method 1: Hook ALL raycasting functions
+    local function hookRaycasting()
+        originalMethods.Raycast = workspace.Raycast
+        originalMethods.FindPartOnRay = workspace.FindPartOnRay
+        originalMethods.FindPartOnRayWithIgnoreList = workspace.FindPartOnRayWithIgnoreList
+        originalMethods.RaycastWithParams = workspace.RaycastWithParams or function() end
 
-    workspace.Raycast = function(origin, direction, raycastParams, extras)
-        local result = workspaceRaycast(origin, direction, raycastParams, extras)
+        -- Hook workspace.Raycast
+        workspace.Raycast = function(origin, direction, raycastParams, extras)
+            local result = originalMethods.Raycast(origin, direction, raycastParams, extras)
 
-        -- Check if the raycast hit Eyes
-        if result and Settings.ScreechProtection then
-            local hitPart = result.Instance
-
-            -- Check if we hit Eyes entity
-            if hitPart.Name == "Eyes" or hitPart:IsDescendantOf(workspace:FindFirstChild("Eyes")) then
-                -- Check if raycast is from player character (likely damage raycast)
-                local char = LocalPlayer.Character
-                if char then
-                    local humanoidRootPart = char:FindFirstChild("HumanoidRootPart")
-                    if humanoidRootPart and (origin - humanoidRootPart.Position).Magnitude < 5 then
-                        WaveDebug.debug("Blocked Eyes damage raycast!")
-                        return nil -- Block the raycast
-                    end
+            if Settings.ScreechProtection and result then
+                local hitPart = result.Instance
+                if hitPart and (hitPart.Name == "Eyes" or hitPart.Name == "Core" or
+                   hitPart:IsDescendantOf(workspace:FindFirstChild("Eyes"))) then
+                    WaveDebug.debug("Blocked Eyes raycast to " .. hitPart.Name)
+                    return nil
                 end
+            end
+            return result
+        end
+
+        -- Hook FindPartOnRay
+        workspace.FindPartOnRay = function(ray, ignoreDescendantsInstance, terrainCellsAreCubes, ignoreWater)
+            local result = originalMethods.FindPartOnRay(ray, ignoreDescendantsInstance, terrainCellsAreCubes, ignoreWater)
+
+            if Settings.ScreechProtection and result then
+                if result.Instance and (result.Instance.Name == "Eyes" or result.Instance.Name == "Core" or
+                   result.Instance:IsDescendantOf(workspace:FindFirstChild("Eyes"))) then
+                    WaveDebug.debug("Blocked Eyes FindPartOnRay")
+                    return nil
+                end
+            end
+            return result
+        end
+
+        -- Hook FindPartOnRayWithIgnoreList
+        workspace.FindPartOnRayWithIgnoreList = function(ray, ignoreDescendantsInstances, terrainCellsAreCubes)
+            local result = originalMethods.FindPartOnRayWithIgnoreList(ray, ignoreDescendantsInstances, terrainCellsAreCubes)
+
+            if Settings.ScreechProtection and result then
+                if result.Instance and (result.Instance.Name == "Eyes" or result.Instance.Name == "Core" or
+                   result.Instance:IsDescendantOf(workspace:FindFirstChild("Eyes"))) then
+                    WaveDebug.debug("Blocked Eyes FindPartOnRayWithIgnoreList")
+                    return nil
+                end
+            end
+            return result
+        end
+    end
+
+    -- Method 2: Destroy/disable Eyes components
+    local function disableEyesComponents(eyes)
+        if not eyes then return end
+
+        -- Disable Core part
+        local core = eyes:FindFirstChild("Core")
+        if core then
+            -- Make Core completely non-interactive
+            core.CanCollide = false
+            core.CanTouch = false
+            core.Anchored = true
+
+            -- Disable any scripts in Core
+            for _, child in pairs(core:GetDescendants()) do
+                if child:IsA("Script") or child:IsA("LocalScript") then
+                    child:Destroy()
+                end
+            end
+
+            -- Disable EyesParticle
+            local particle = core:FindFirstChild("Attachment") and core.Attachment:FindFirstChild("EyesParticle")
+            if particle then
+                particle.Enabled = false
+                particle:Emit(0)
             end
         end
 
-        return result
+        -- Disable all scripts in entire Eyes model
+        for _, script in pairs(eyes:GetDescendants()) do
+            if script:IsA("Script") or script:IsA("LocalScript") then
+                script:Destroy()
+            end
+        end
     end
 
-    -- Also protect camera-based raycasts
-    local cam = workspace.CurrentCamera
-    local lastLookTime = 0
-
-    -- Create invisible wall between player and Eyes
-    local function createProtectionWall(eyes)
-        if not LocalPlayer.Character or not eyes then return end
+    -- Method 3: Create protective barrier
+    local function createProtectiveBarrier(eyes)
+        if not eyes or not LocalPlayer.Character then return end
 
         local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
 
-        local wall = Instance.new("Part")
-        wall.Name = "EyesProtectionWall"
-        wall.Size = Vector3.new(1, 20, 10)
-        wall.Material = Enum.Material.ForceField
-        wall.Transparency = 1
-        wall.CanCollide = false
-        wall.Anchored = true
+        -- Create multiple invisible parts
+        for i = 1, 5 do
+            local barrier = Instance.new("Part")
+            barrier.Name = "EyesBarrier_" .. i
+            barrier.Size = Vector3.new(10, 20, 1)
+            barrier.Material = Enum.Material.ForceField
+            barrier.Transparency = 1
+            barrier.CanCollide = true
+            barrier.Anchored = true
+            barrier.Position = eyes.Position
 
-        -- Position wall between player and eyes
-        local eyesPos = eyes:GetPivot().Position
-        local playerPos = hrp.Position
-        local midPoint = (eyesPos + playerPos) / 2
+            -- Calculate angle
+            local angle = (math.pi * 2 / 5) * i
+            local offset = Vector3.new(math.cos(angle) * 8, 0, math.sin(angle) * 8)
+            barrier.CFrame = CFrame.new(eyes.Position + offset, eyes.Position)
+            barrier.Parent = workspace
 
-        wall.CFrame = CFrame.new(midPoint, eyesPos)
-        wall.Parent = workspace
+            task.delay(0.5, function()
+                if barrier then barrier:Destroy() end
+            end)
+        end
+    end
 
-        -- Remove after 1 second
-        task.delay(1, function()
-            if wall then wall:Destroy() end
-        end)
+    -- Method 4: Override ALL damage methods
+    local function overrideDamageMethods()
+        if not LocalPlayer.Character then return end
+
+        local hum = LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
+        if hum then
+            -- Override TakeDamage
+            originalMethods.TakeDamage = hum.TakeDamage
+            hum.TakeDamage = function(self, amount)
+                if Settings.ScreechProtection and workspace:FindFirstChild("Eyes") then
+                    WaveDebug.debug("Blocked " .. amount .. " damage from Eyes!")
+                    return
+                end
+                return originalMethods.TakeDamage(self, amount)
+            end
+
+            -- Override Health property
+            originalMethods.Health = hum.Health
+            hum:GetPropertyChangedSignal("Health"):Connect(function()
+                if Settings.ScreechProtection and workspace:FindFirstChild("Eyes") and hum.Health < originalMethods.Health then
+                    WaveDebug.debug("Restored health from Eyes damage!")
+                    hum.Health = originalMethods.Health
+                end
+            end)
+
+            -- Set health to maximum
+            hum.MaxHealth = 100
+            hum.Health = 100
+        end
     end
 
     -- Main protection function
@@ -1434,51 +1522,51 @@ local function setupRealEyesProtection()
         if eyes and Settings.ScreechProtection and not protected then
             protected = true
 
-            warn("👁️ EYES DETECTED - Activating raycast protection!")
+            warn("👁️ EYES DETECTED - ACTIVATING COMPREHENSIVE PROTECTION!")
 
             if Settings.EntityNotify then
-                Library:Notify({Title = "👁️ EYES PROTECTED", Description = "Line-of-sight raycasts blocked!", Time = 3})
+                Library:Notify({Title = "👁️ ULTIMATE EYES PROTECTION", Description = "All damage methods blocked!", Time = 3})
             end
 
-            -- Create protection walls periodically
+            -- Apply all protection methods
+            hookRaycasting()
+            disableEyesComponents(eyes)
+            overrideDamageMethods()
+
+            -- Continuous protection
             task.spawn(function()
                 while eyes and eyes.Parent and Settings.ScreechProtection do
-                    createProtectionWall(eyes)
-                    task.wait(0.4) -- Faster than damage rate
+                    -- Re-disable components periodically
+                    disableEyesComponents(eyes)
+                    createProtectiveBarrier(eyes)
+
+                    -- Ensure health stays full
+                    if LocalPlayer.Character then
+                        local hum = LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
+                        if hum and hum.Health < 100 then
+                            hum.Health = 100
+                        end
+                    end
+
+                    task.wait(0.1)
                 end
                 protected = false
             end)
-
-            -- Override Humanoid:TakeDamage to prevent damage
-            if LocalPlayer.Character then
-                local hum = LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
-                if hum then
-                    local originalTakeDamage = hum.TakeDamage
-                    hum.TakeDamage = function(self, amount)
-                        -- Check if Eyes exists
-                        if workspace:FindFirstChild("Eyes") and Settings.ScreechProtection then
-                            WaveDebug.debug("Blocked " .. amount .. " damage from Eyes!")
-                            return -- Don't apply damage
-                        end
-                        return originalTakeDamage(self, amount)
-                    end
-                end
-            end
         end
     end
 
-    -- Monitoring
+    -- Monitor for Eyes
     task.spawn(function()
         while true do
             protectFromEyes()
-            task.wait(0.2)
+            task.wait(0.1)
         end
     end)
 
     -- Spawn detection
     Workspace.ChildAdded:Connect(function(child)
         if child.Name == "Eyes" and Settings.ScreechProtection then
-            task.wait(0.1)
+            task.wait(0.01) -- Immediate protection
             protectFromEyes()
         end
     end)
@@ -1493,7 +1581,7 @@ local function setupRealEyesProtection()
             highlight.Parent = EyesModel
             highlight.FillColor = Color3.fromRGB(255, 255, 0)
             highlight.OutlineColor = Color3.new(1, 1, 0)
-            highlight.FillTransparency = 0.3
+            highlight.FillTransparency = 0.2
             highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 
             local billboard = Instance.new("BillboardGui")
@@ -1518,7 +1606,7 @@ local function setupRealEyesProtection()
                         local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                         if hrp then
                             local dist = math.floor((hrp.Position - EyesModel.Position).Magnitude)
-                            label.Text = "👁️ EYES - " .. dist .. " studs (Protected)"
+                            label.Text = "👁️ EYES - " .. dist .. " studs (100% Protected)"
                         end
                     end)
                     task.wait(0.5)
@@ -1533,8 +1621,8 @@ local function setupRealEyesProtection()
     RunService.Heartbeat:Connect(checkForEyesESP)
 end
 
--- Initialize real Eyes protection
-setupRealEyesProtection()
+-- Initialize comprehensive Eyes protection
+setupComprehensiveEyesProtection()
 
 -- Screech protection (safe check)
 task.spawn(function()
