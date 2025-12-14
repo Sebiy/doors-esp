@@ -2001,17 +2001,29 @@ local OriginalLighting = {
     Ambient = Lighting.Ambient,
     Brightness = Lighting.Brightness,
     FogEnd = Lighting.FogEnd,
+    FogStart = Lighting.FogStart,
     GlobalShadows = Lighting.GlobalShadows,
-    OutdoorAmbient = Lighting.OutdoorAmbient
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+    ClockTime = Lighting.ClockTime,
+    GeographicLatitude = Lighting.GeographicLatitude,
+    EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
+    EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale,
+    ExposureCompensation = Lighting.ExposureCompensation
 }
 
 ApplyFullbright = function()
     if Settings.Fullbright then
         Lighting.Ambient = Color3.new(1, 1, 1)
         Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
-        Lighting.Brightness = Settings.Brightness
+        Lighting.Brightness = 2
         Lighting.FogEnd = 100000
+        Lighting.FogStart = 0
         Lighting.GlobalShadows = false
+        Lighting.ClockTime = 12
+        Lighting.GeographicLatitude = 0
+        Lighting.EnvironmentDiffuseScale = 1
+        Lighting.EnvironmentSpecularScale = 1
+        Lighting.ExposureCompensation = 1
     end
 end
 
@@ -2020,21 +2032,34 @@ RestoreLighting = function()
     Lighting.OutdoorAmbient = OriginalLighting.OutdoorAmbient
     Lighting.Brightness = OriginalLighting.Brightness
     Lighting.FogEnd = OriginalLighting.FogEnd
+    Lighting.FogStart = OriginalLighting.FogStart or 50
     Lighting.GlobalShadows = OriginalLighting.GlobalShadows
+    Lighting.ClockTime = OriginalLighting.ClockTime or 14
+    Lighting.GeographicLatitude = OriginalLighting.GeographicLatitude or 50
+    Lighting.EnvironmentDiffuseScale = OriginalLighting.EnvironmentDiffuseScale or 1
+    Lighting.EnvironmentSpecularScale = OriginalLighting.EnvironmentSpecularScale or 1
+    Lighting.ExposureCompensation = OriginalLighting.ExposureCompensation or 0
 end
 
--- Only re-apply when game tries to change lighting (not every frame)
-local lastFullbrightApply = 0
+-- Continuous fullbright application when enabled
+task.spawn(function()
+    while true do
+        if Settings.Fullbright then
+            ApplyFullbright()
+        end
+        task.wait(0.5)
+    end
+end)
+
+-- Also re-apply when game tries to change lighting
 Lighting:GetPropertyChangedSignal("Brightness"):Connect(function()
-    if Settings.Fullbright and tick() - lastFullbrightApply > 0.1 then
-        lastFullbrightApply = tick()
+    if Settings.Fullbright then
         task.defer(ApplyFullbright)
     end
 end)
 
 Lighting:GetPropertyChangedSignal("Ambient"):Connect(function()
-    if Settings.Fullbright and tick() - lastFullbrightApply > 0.1 then
-        lastFullbrightApply = tick()
+    if Settings.Fullbright then
         task.defer(ApplyFullbright)
     end
 end)
