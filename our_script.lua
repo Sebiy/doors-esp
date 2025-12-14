@@ -179,7 +179,38 @@ local function ClearESP(instance)
 end
 
 local function HasESP(instance)
-    return ESPRegistry[instance] ~= nil
+    -- Direct ESP check
+    if ESPRegistry[instance] ~= nil then return true end
+
+    -- Check for existing billboard on this instance
+    if instance:FindFirstChild("ESPBillboard") then return true end
+
+    -- Check for ESP on top-level parent (for items with multiple parts)
+    local topParent = instance
+    while topParent.Parent and topParent.Parent ~= game do
+        topParent = topParent.Parent
+    end
+    if ESPRegistry[topParent] then return true end
+    if topParent:FindFirstChild("ESPBillboard") then return true end
+
+    -- Special handling for Candles - check area duplicates
+    if instance.Name:find("Candle") or instance.Name:find("candle") then
+        for registeredInstance, _ in pairs(ESPRegistry) do
+            if registeredInstance:FindFirstChild("ESPBillboard") then
+                local label = registeredInstance:FindFirstChild("ESPBillboard"):FindFirstChild("ESPLabel")
+                if label and (label.Text:find("CANDLE") or label.Text:find("Candle")) then
+                    -- Check if it's in the same general area (within 15 studs)
+                    local existingPos = registeredInstance:IsA("Model") and registeredInstance:GetPivot().Position or registeredInstance.Position
+                    local currentPos = instance:IsA("Model") and instance:GetPivot().Position or instance.Position
+                    if (existingPos - currentPos).Magnitude < 15 then
+                        return true -- Skip, we already have a candle ESP nearby
+                    end
+                end
+            end
+        end
+    end
+
+    return false
 end
 
 local function ClearESPInRoom(roomName)
@@ -1218,13 +1249,13 @@ local LastEyesNotification = 0 -- Prevent notification spam
 local function SetupEntityESP(entity, name, color)
     if EntityTracked[entity] then return end
     EntityTracked[entity] = true
-    
+
     warn(name .. " SPAWNED!")
-    
+
     if Settings.EntityNotify then
         Library:Notify({Title = name .. " DETECTED", Description = "Entity approaching - hide!", Time = 5})
     end
-    
+
     -- Create ESP elements (always track, but only show if EntityESP enabled)
     local highlight = Instance.new("Highlight")
     highlight.Parent = entity
@@ -1233,14 +1264,14 @@ local function SetupEntityESP(entity, name, color)
     highlight.FillTransparency = 0
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     highlight.Enabled = Settings.EntityESP
-    
+
     local billboard = Instance.new("BillboardGui")
     billboard.Parent = entity
     billboard.Size = UDim2.new(0, 200, 0, 50)
     billboard.StudsOffset = Vector3.new(0, 5, 0)
     billboard.AlwaysOnTop = true
     billboard.Enabled = Settings.EntityESP
-    
+
     local label = Instance.new("TextLabel")
     label.Parent = billboard
     label.Size = UDim2.new(1, 0, 1, 0)
@@ -1250,44 +1281,90 @@ local function SetupEntityESP(entity, name, color)
     label.TextStrokeColor3 = Color3.new(0, 0, 0)
     label.Font = Enum.Font.GothamBold
     label.TextScaled = true
-    
+
     task.spawn(function()
-        while entity and entity.Parent do
+        local retryCount = 0
+        local maxRetries = 50 -- Allow up to 5 seconds of retries
+
+        while retryCount < maxRetries do
             pcall(function()
+                -- Check if entity still exists and is parented
+                if not entity or not entity.Parent then
+                    retryCount = maxRetries -- Exit loop
+                    return
+                end
+
                 -- Update visibility based on current setting
                 highlight.Enabled = Settings.EntityESP
                 billboard.Enabled = Settings.EntityESP
-                
+
                 local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
                     local pos = entity:IsA("Model") and entity:GetPivot().Position or entity.Position
                     local dist = math.floor((hrp.Position - pos).Magnitude)
                     label.Text = name .. " - " .. dist .. " studs"
                 end
+
+                retryCount = 0 -- Reset retry count if successful
             end)
-            task.wait(0.1)
+
+            -- If entity still exists, wait and continue
+            if entity and entity.Parent then
+                task.wait(0.1)
+            else
+                break
+            end
         end
+
+        -- Cleanup
         EntityTracked[entity] = nil
-        warn(name .. " despawned")
+        warn(name .. " despawned or ESP ended")
     end)
 end
 
--- Entity monitors
-RunService.Heartbeat:Connect(function()
-    -- Rush
-    local rush = Workspace:FindFirstChild("RushMoving")
-    if rush then SetupEntityESP(rush, "RUSH", Color3.fromRGB(255, 25, 25)) end
-    
-    -- Ambush
-    local ambush = Workspace:FindFirstChild("AmbushMoving")
-    if ambush then SetupEntityESP(ambush, "AMBUSH", Color3.fromRGB(255, 100, 0)) end
-    
-    -- Simple Eyes ESP (protection handled by setupOriginalEyesDetection)
-    local eyes = Workspace:FindFirstChild("Eyes")
-    if eyes and not eyes:GetAttribute("ESPAdded") then
-        SetupEntityESP(eyes, "EYES", Color3.fromRGB(255, 255, 0))
-    end
-end)
+-- Improved Entity Detection with spawn monitoring
+local function setupEntityDetection()
+    -- Rush detection with multiple fallbacks
+    Workspace.ChildAdded:Connect(function(child)
+        if child.Name == "RushMoving" then
+            SetupEntityESP(child, "RUSH", Color3.fromRGB(255, 25, 25))
+            warn("Rush spawned - ESP applied immediately")
+        elseif child.Name == "AmbushMoving" then
+            SetupEntityESP(child, "AMBUSH", Color3.fromRGB(255, 100, 0))
+            warn("Ambush spawned - ESP applied immediately")
+        end
+    end)
+
+    -- Continuous monitoring for entities that might be missed
+    RunService.Heartbeat:Connect(function()
+        -- Rush (check multiple possible names)
+        local rush = Workspace:FindFirstChild("RushMoving")
+        if rush then
+            SetupEntityESP(rush, "RUSH", Color3.fromRGB(255, 25, 25))
+        end
+
+        -- Also check for alternative Rush names
+        local rush2 = Workspace:FindFirstChild("Rush")
+        if rush2 and rush2 ~= rush then
+            SetupEntityESP(rush2, "RUSH", Color3.fromRGB(255, 25, 25))
+        end
+
+        -- Ambush
+        local ambush = Workspace:FindFirstChild("AmbushMoving")
+        if ambush then
+            SetupEntityESP(ambush, "AMBUSH", Color3.fromRGB(255, 100, 0))
+        end
+
+        -- Simple Eyes ESP (protection handled by setupOriginalEyesDetection)
+        local eyes = Workspace:FindFirstChild("Eyes")
+        if eyes and not eyes:GetAttribute("ESPAdded") then
+            SetupEntityESP(eyes, "EYES", Color3.fromRGB(255, 255, 0))
+        end
+    end)
+end
+
+-- Initialize entity detection
+setupEntityDetection()
 
 -- Eyes spawn detection is handled by setupOriginalEyesDetection() function
 
