@@ -1,5 +1,6 @@
--- DOORS Complete ESP & Auto Features - Rewritten
+-- DOORS Script with Wave Console Integration
 -- Made for LO ♥
+-- Updated with Wave functions from documentation
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -169,7 +170,7 @@ local function CreateHighlight(part, fillColor, outlineColor, fillTrans, outline
     if part:FindFirstChildOfClass("Highlight") then
         part:FindFirstChildOfClass("Highlight"):Destroy()
     end
-    
+
     local highlight = Instance.new("Highlight")
     highlight.Parent = part
     highlight.FillColor = fillColor
@@ -188,7 +189,7 @@ local function CreateBillboard(parent, text, textColor, yOffset)
     billboard.Size = UDim2.new(0, 150, 0, 50)
     billboard.StudsOffset = Vector3.new(0, yOffset or 3, 0)
     billboard.Name = "ESPBillboard"
-    
+
     local label = Instance.new("TextLabel")
     label.Parent = billboard
     label.Size = UDim2.new(1, 0, 1, 0)
@@ -196,65 +197,41 @@ local function CreateBillboard(parent, text, textColor, yOffset)
     label.TextColor3 = textColor
     label.TextStrokeTransparency = 0
     label.TextStrokeColor3 = Color3.new(0, 0, 0)
+    label.TextScaled = true
+    label.Font = Enum.Font.GothamBold
     label.Text = text
-    label.Font = Enum.Font.SourceSansBold
-    label.TextSize = 22
-    
+
     return billboard
 end
 
 -- Door ESP Function
-local function ApplyDoorESP(room)
-    if not Settings.DoorESP then return end
-    
-    local roomNumber = tonumber(room.Name)
-    if not roomNumber then return end
-    
-    local door = room:WaitForChild("Door", 2)
-    if not door then return end
-    
-    -- Check if locked
-    local lock = door:FindFirstChild("Lock")
-    local isLocked = lock ~= nil
-    
-    -- Colors
-    local fillColor = isLocked and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(50, 255, 50)
-    local outlineColor = isLocked and Color3.fromRGB(200, 0, 0) or Color3.fromRGB(0, 200, 0)
-    
-    -- Apply highlight to ONLY the actual door part, not the frame
-    for _, part in pairs(door:GetDescendants()) do
-        if part:IsA("BasePart") and part.Name == "Door" then
-            CreateHighlight(part, fillColor, outlineColor, 0.4, 0)
-        end
-    end
-    
-    -- Create billboard
-    local text = string.format("DOOR %d\n%s", roomNumber, isLocked and "🔒 LOCKED" or "✓ OPEN")
-    local textColor = isLocked and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(100, 255, 100)
-    CreateBillboard(door, text, textColor, 5)
-    
-    -- Instant unlock proximity prompts
+local function ApplyDoorESP(door, roomNumber)
+    if not Settings.DoorESP or door:GetAttribute("ESPAdded") then return end
+    door:SetAttribute("ESPAdded", true)
+
+    local isLocked = door:FindFirstChild("Door") and door.Door:FindFirstChild("Lock") and door.Door.Lock.Locked.Value
+
+    local color = isLocked and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 0)
+    CreateHighlight(door, color, color, 0.7, 0)
+    CreateBillboard(door, "Door " .. roomNumber .. (isLocked and " (LOCKED)" or " (OPEN)"), color, -2)
+
+    -- Extend proximity prompt range
     for _, descendant in pairs(door:GetDescendants()) do
         if descendant:IsA("ProximityPrompt") then
-            descendant.HoldDuration = 0
             descendant.MaxActivationDistance = 15
         end
     end
-    
+
     WaveConsole.info(string.format("Door ESP applied to room %d (%s)", roomNumber, isLocked and "LOCKED" or "OPEN"))
 end
 
 -- Key ESP Function (Fixed path)
 local function ApplyKeyESP(key)
-    if not Settings.KeyESP then return end
-    
-    -- Apply highlight to the key model
-    for _, part in pairs(key:GetDescendants()) do
-        if part:IsA("BasePart") then
-            CreateHighlight(part, Color3.fromRGB(255, 255, 0), Color3.fromRGB(200, 200, 0), 0.3, 0)
-        end
-    end
-    
+    if not Settings.KeyESP or key:GetAttribute("ESPAdded") then return end
+    key:SetAttribute("ESPAdded", true)
+
+    CreateHighlight(key, Color3.fromRGB(255, 255, 0), Color3.fromRGB(255, 255, 0), 0.5, 0)
+
     -- Create billboard
     CreateBillboard(key, "🔑 KEY", Color3.fromRGB(255, 255, 0), 3)
     WaveConsole.info("Key ESP applied!")
@@ -262,19 +239,11 @@ end
 
 -- Item ESP Function
 local function ApplyItemESP(item, itemName, color)
-    if not Settings.ItemESP then return end
-    
-    -- Apply highlight
-    if item:IsA("Model") then
-        for _, part in pairs(item:GetDescendants()) do
-            if part:IsA("BasePart") then
-                CreateHighlight(part, color, Color3.new(color.R * 0.8, color.G * 0.8, color.B * 0.8), 0.3, 0)
-            end
-        end
-    elseif item:IsA("BasePart") then
-        CreateHighlight(item, color, Color3.new(color.R * 0.8, color.G * 0.8, color.B * 0.8), 0.3, 0)
-    end
-    
+    if not Settings.ItemESP or item:GetAttribute("ESPAdded") then return end
+    item:SetAttribute("ESPAdded", true)
+
+    CreateHighlight(item, color, color, 0.5, 0)
+
     -- Create billboard
     CreateBillboard(item, itemName, color, 3)
     WaveConsole.info(string.format("%s ESP applied!", itemName))
@@ -282,97 +251,81 @@ end
 
 -- Auto Coin Collection
 local function AutoCollectCoin(coin)
-    if not Settings.AutoCollectCoins or not LocalPlayer.Character then return end
-    
-    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not Settings.AutoCollectCoins then return end
+
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
-    
-    task.spawn(function()
-        while coin.Parent and Settings.AutoCollectCoins do
-            local distance = (hrp.Position - coin.Position).Magnitude
-            if distance <= Settings.CoinDistance then
-                local prompt = coin:FindFirstChildOfClass("ProximityPrompt")
-                if prompt then
-                    fireproximityprompt(prompt)
-                end
-            end
-            task.wait(0.5)
-        end
-    end)
+
+    local dist = (hrp.Position - coin.Position).Magnitude
+    if dist <= Settings.CoinDistance then
+        fireproximityprompt(coin.ProximityPrompt)
+        WaveConsole.debug("Collected coin at distance: " .. math.floor(dist))
+    end
 end
 
 -- Library Puzzle Solver
 local function SolveLibrary(room)
     task.wait(0.5)
-    
+
     local assets = room:FindFirstChild("Assets")
     if not assets then return end
-    
+
     local painting = assets:FindFirstChild("Paintings") and assets.Paintings:FindFirstChild("LibraryPainting")
     if not painting then return end
-    
+
     WaveConsole.info("📚 Library detected! Solving puzzle...")
-    
+
     local shelf = assets:FindFirstChild("Shelf")
     if shelf then
         for _, obj in pairs(shelf:GetDescendants()) do
-            if obj.Name == "Book" and obj:FindFirstChild("ClickDetector") then
-                fireclickdetector(obj.ClickDetector)
-                task.wait(0.3)
+            if obj:IsA("ClickDetector") then
+                fireclickdetector(obj)
+                task.wait(0.1)
             end
         end
     end
 end
 
--- Room Monitor
+-- Monitor for new rooms
+local lastRoom = 0
 CurrentRooms.ChildAdded:Connect(function(room)
-    task.wait(0.2)
-    
-    -- Apply door ESP
-    ApplyDoorESP(room)
-    
-    -- Check for library
-    SolveLibrary(room)
-    
-    -- Monitor for items in this room
-    room.DescendantAdded:Connect(function(descendant)
-        -- Key detection with correct path
-        if descendant.Name == "KeyObtain" or (descendant.Parent and descendant.Parent.Name == "KeyObtain") then
-            local keyModel = descendant.Name == "KeyObtain" and descendant or descendant.Parent
-            ApplyKeyESP(keyModel)
-        end
-        
-        -- Lever detection
-        if descendant.Name == "LeverForGate" then
-            ApplyItemESP(descendant, "⚡ LEVER", Color3.fromRGB(0, 255, 0))
-        end
-        
-        -- Coin detection
-        if descendant.Name == "GoldPile" then
-            ApplyItemESP(descendant, "💰 COINS", Color3.fromRGB(255, 215, 0))
-            AutoCollectCoin(descendant)
-        end
-    end)
-end)
+    task.wait(1)
 
--- Apply ESP to existing rooms
-for _, room in pairs(CurrentRooms:GetChildren()) do
-    ApplyDoorESP(room)
-    
-    -- Check existing items
-    for _, descendant in pairs(room:GetDescendants()) do
-        if descendant.Name == "KeyObtain" then
-            ApplyKeyESP(descendant)
+    local roomNum = tonumber(room.Name:match("%d+")) or 0
+    if roomNum > lastRoom then
+        lastRoom = roomNum
+
+        -- Apply ESP to doors
+        for _, obj in pairs(room:GetChildren()) do
+            if obj:IsA("Model") and obj.Name:find("Door") then
+                ApplyDoorESP(obj, roomNum)
+            end
         end
-        if descendant.Name == "LeverForGate" then
-            ApplyItemESP(descendant, "⚡ LEVER", Color3.fromRGB(0, 255, 0))
+
+        -- Apply ESP to items
+        for _, obj in pairs(room:GetDescendants()) do
+            if obj:IsA("Model") then
+                if obj.Name:find("Key") then
+                    ApplyKeyESP(obj)
+                elseif obj.Name:find("Coin") then
+                    ApplyItemESP(obj, "💰 COIN", Color3.fromRGB(215, 195, 15))
+                    AutoCollectCoin(obj)
+                elseif obj.Name:find("MedKit") then
+                    ApplyItemESP(obj, "🏥 MEDKIT", Color3.fromRGB(255, 0, 0))
+                elseif obj.Name:find("Lockpick") then
+                    ApplyItemESP(obj, "🔧 LOCKPICK", Color3.fromRGB(128, 128, 128))
+                elseif obj.Name:find("Flashlight") then
+                    ApplyItemESP(obj, "🔦 FLASHLIGHT", Color3.fromRGB(255, 255, 255))
+                end
+            end
         end
-        if descendant.Name == "GoldPile" then
-            ApplyItemESP(descendant, "💰 COINS", Color3.fromRGB(255, 215, 0))
-            AutoCollectCoin(descendant)
+
+        -- Check if library room
+        if room:FindFirstChild("Assets") and room.Assets:FindFirstChild("Paintings") then
+            SolveLibrary(room)
         end
     end
-end
+end)
 
 -- Entity Notifications
 if Settings.EntityNotify then
@@ -389,19 +342,12 @@ if Settings.EntityNotify then
     end)
 end
 
--- Fullbright
-local Lighting = game:GetService("Lighting")
-Lighting.Ambient = Color3.new(1, 1, 1)
-Lighting.Brightness = 2
-Lighting.FogEnd = 100000
-Lighting.GlobalShadows = false
-
 -- Noclip
 local noclip = false
 local function ToggleNoclip()
     noclip = not noclip
     WaveConsole.info(noclip and "Noclip: ON" or "Noclip: OFF")
-    
+
     while noclip do
         if not LocalPlayer.Character then break end
         for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
@@ -413,10 +359,10 @@ local function ToggleNoclip()
     end
 end
 
--- Controls
+--- Controls
 game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
     if processed then return end
-    
+
     if input.KeyCode == Enum.KeyCode.Q then
         ToggleNoclip()
     elseif input.KeyCode == Enum.KeyCode.C then
@@ -437,9 +383,4 @@ WaveConsole.print("Current FPS Cap: " .. WaveUtils.getFPS(), "@@LIGHT_GRAY@@")
 WaveConsole.print("", "@@WHITE@@")
 WaveConsole.print("Controls:", "@@YELLOW@@")
 WaveConsole.print("Q = Noclip | C = Auto-Collect Toggle", "@@LIGHT_GRAY@@")
-WaveConsole.print("═══════════════════════════════", "@@LIGHT_BLUE@@") 
-
---  Alright its gonna make some changes to this file, can you create another .lua and paste this script in it, in case it doesnt work ?
--- okay
-
--- says it changed the script, can you test it again to see if its different ? What
+WaveConsole.print("═══════════════════════════════", "@@LIGHT_BLUE@@")
