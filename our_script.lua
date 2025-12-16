@@ -1,5 +1,6 @@
 -- DOORS Complete ESP & Auto Features - CLEAN REWRITE
--- Made for LO
+-- Made for LO ♥
+-- Enhanced with Wave Console Integration - COMPLETE VERSION
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -7,87 +8,57 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 local CurrentRooms = Workspace:WaitForChild("CurrentRooms")
+local Lighting = game:GetService("Lighting")
 
 -- ═══════════════════════════════════════════════════════════
--- WAVE EXECUTOR DEBUG SYSTEM
+-- WAVE CONSOLE INTEGRATION - Using official Wave functions
 -- ═══════════════════════════════════════════════════════════
 
--- Initialize Wave Executor debug output
-local WaveDebug = {}
-local function setupWaveDebug()
-    -- Test multiple Wave API methods
-    local waveAvailable = false
+-- Initialize Wave console immediately
+rconsolecreate()
+rconsolename("vesper.lua v2.1 - Wave Console - " .. os.date("%Y-%m-%d %H:%M:%S"))
 
-    -- Method 1: Check for wave global
-    if wave then
-        waveAvailable = true
-        WaveDebug.print = function(msg)
-            if wave.print then
-                wave.print("[VESPER] " .. tostring(msg))
-            else
-                print("[VESPER] " .. tostring(msg))
-            end
-        end
+-- Console header
+rconsoleprint("@@LIGHT_BLUE@@")
+rconsoleprint("╔════════════════════════════════════════════════════════╗\n")
+rconsoleprint("@@CYAN@@")
+rconsoleprint("│                 vesper.lua v2.1 - Wave Edition                │\n")
+rconsoleprint("│            DOORS Script with Official Wave Functions          │\n")
+rconsoleprint("@@LIGHT_BLUE@@")
+rconsoleprint("╚════════════════════════════════════════════════════════╝\n")
+rconsoleprint("@@WHITE@@")
 
-        WaveDebug.debug = function(msg)
-            if wave.debug then
-                wave.debug("[VESPER-DEBUG] " .. tostring(msg))
-            else
-                print("[VESPER-DEBUG] " .. tostring(msg))
-            end
-        end
-
-        WaveDebug.info = function(msg)
-            if wave.log and wave.log.info then
-                wave.log.info("[VESPER-INFO] " .. tostring(msg))
-            else
-                print("[VESPER-INFO] " .. tostring(msg))
-            end
-        end
-
-        WaveDebug.warn = function(msg)
-            if wave.log and wave.log.warn then
-                wave.log.warn("[VESPER-WARN] " .. tostring(msg))
-            else
-                warn("[VESPER-WARN] " .. tostring(msg))
-            end
-        end
-
-        WaveDebug.error = function(msg)
-            if wave.log and wave.log.error then
-                wave.log.error("[VESPER-ERROR] " .. tostring(msg))
-            else
-                warn("[VESPER-ERROR] " .. tostring(msg))
-            end
-        end
-
-        -- Try to enable console redirection
-        if wave.console then
-            pcall(function() wave.console.redirect(true) end)
-            pcall(function() wave.console.timestamp(true) end)
-        end
-
-        WaveDebug.info("Wave Executor debug system initialized! API detected.")
-
+-- Simple debug functions using Wave
+local function debugPrint(message, level)
+    level = level or "INFO"
+    if level == "ERROR" then
+        rconsoleerr("@@RED@@[ERROR] @@WHITE@@" .. tostring(message) .. "\n")
+    elseif level == "WARN" then
+        rconsolewarn("@@YELLOW@@[WARN] @@WHITE@@" .. tostring(message) .. "\n")
+    elseif level == "DEBUG" then
+        rconsoledebug("@@LIGHT_BLUE@@[DEBUG] @@WHITE@@" .. tostring(message) .. "\n")
     else
-        -- Fallback to standard print
-        waveAvailable = false
-        WaveDebug = {
-            print = function(msg) print("[VESPER] " .. tostring(msg)) end,
-            debug = function(msg) print("[VESPER-DEBUG] " .. tostring(msg)) end,
-            info = function(msg) print("[VESPER-INFO] " .. tostring(msg)) end,
-            warn = function(msg) warn("[VESPER-WARN] " .. tostring(msg)) end,
-            error = function(msg) warn("[VESPER-ERROR] " .. tostring(msg)) end
-        }
-        WaveDebug.info("Wave Executor API not found - using fallback debug system")
+        rconsoleprint("@@WHITE@@" .. tostring(message) .. "\n")
     end
-
-    return waveAvailable
 end
 
-setupWaveDebug()
+-- Test console immediately
+debugPrint("Wave Console initialized!", "INFO")
+debugPrint("Using official Wave rconsole functions", "INFO")
+
+-- Show system info
+local success, hwid = pcall(gethwid)
+if success then
+    debugPrint("HWID: " .. hwid, "INFO")
+end
+
+local success2, fps = pcall(getfpscap)
+if success2 then
+    debugPrint("FPS Cap: " .. tostring(fps), "INFO")
+end
 
 -- Settings
 local Settings = {
@@ -150,11 +121,20 @@ local Settings = {
     ThirdSensitivity = 1,
     Fullbright = false,
     Brightness = 2,
-    FogEnabled = false
+    FogEnabled = false,
+    GodMode = false,
+    AmbushImmunity = false,
+    RushImmunity = false,
+    SeekImmunity = false,
+    HaltImmunity = false,
+    FigureImmunity = false,
+    InstantKill = false,
+    OnePunch = false,
+    NoCooldown = false
 }
 
 -- ═══════════════════════════════════════════════════════════
--- UNIFIED ESP SYSTEM - Clean implementation
+-- UNIFIED ESP SYSTEM - Clean implementation with distance checks
 -- ═══════════════════════════════════════════════════════════
 
 local ESPRegistry = {} -- Tracks ALL ESP objects by instance
@@ -166,9 +146,64 @@ local RainbowESPEnabled = false
 local RainbowConnection = nil
 local RainbowHue = 0
 
--- Forward declarations for fullbright (defined later)
-local ApplyFullbright, RestoreLighting
+-- Fullbright system - FIXED
+local OriginalLighting = {
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+    Brightness = Lighting.Brightness,
+    FogEnd = Lighting.FogEnd,
+    FogStart = Lighting.FogStart,
+    GlobalShadows = Lighting.GlobalShadows,
+    ClockTime = Lighting.ClockTime,
+    GeographicLatitude = Lighting.GeographicLatitude,
+    EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
+    EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale,
+    ExposureCompensation = Lighting.ExposureCompensation
+}
 
+local function ApplyFullbright()
+    if Settings.Fullbright then
+        Lighting.Ambient = Color3.new(1, 1, 1)
+        Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+        Lighting.Brightness = 2
+        Lighting.FogEnd = 100000
+        Lighting.FogStart = 0
+        Lighting.GlobalShadows = false
+        Lighting.ClockTime = 12
+        Lighting.GeographicLatitude = 0
+        Lighting.EnvironmentDiffuseScale = 1
+        Lighting.EnvironmentSpecularScale = 1
+        Lighting.ExposureCompensation = 1
+        debugPrint("Fullbright applied", "DEBUG")
+    end
+end
+
+local function RestoreLighting()
+    Lighting.Ambient = OriginalLighting.Ambient
+    Lighting.OutdoorAmbient = OriginalLighting.OutdoorAmbient
+    Lighting.Brightness = OriginalLighting.Brightness
+    Lighting.FogEnd = OriginalLighting.FogEnd
+    Lighting.FogStart = OriginalLighting.FogStart or 50
+    Lighting.GlobalShadows = OriginalLighting.GlobalShadows
+    Lighting.ClockTime = OriginalLighting.ClockTime or 14
+    Lighting.GeographicLatitude = OriginalLighting.GeographicLatitude or 50
+    Lighting.EnvironmentDiffuseScale = OriginalLighting.EnvironmentDiffuseScale or 1
+    Lighting.EnvironmentSpecularScale = OriginalLighting.EnvironmentSpecularScale or 1
+    Lighting.ExposureCompensation = OriginalLighting.ExposureCompensation or 0
+    debugPrint("Lighting restored", "DEBUG")
+end
+
+-- Continuous fullbright application
+task.spawn(function()
+    while true do
+        if Settings.Fullbright then
+            ApplyFullbright()
+        end
+        task.wait(0.5)
+    end
+end)
+
+-- ESP Functions with distance and time tracking
 local function ClearESP(instance)
     if ESPRegistry[instance] then
         local data = ESPRegistry[instance]
@@ -184,14 +219,6 @@ local function HasESP(instance)
 
     -- Check for existing billboard on this instance
     if instance:FindFirstChild("ESPBillboard") then return true end
-
-    -- Check for ESP on top-level parent (for items with multiple parts)
-    local topParent = instance
-    while topParent.Parent and topParent.Parent ~= game do
-        topParent = topParent.Parent
-    end
-    if ESPRegistry[topParent] then return true end
-    if topParent:FindFirstChild("ESPBillboard") then return true end
 
     -- Special handling for Candles - check area duplicates
     if instance.Name:find("Candle") or instance.Name:find("candle") then
@@ -223,21 +250,30 @@ local function ClearESPInRoom(roomName)
     for _, instance in ipairs(toRemove) do
         ClearESP(instance)
     end
+    debugPrint("Cleared ESP in room: " .. roomName, "DEBUG")
 end
 
 local function ApplyESP(instance, text, color, espType, roomName)
     if HasESP(instance) then return end
-    
-    -- Extra check: skip if already has billboard (prevents duplicates)
-    if instance:FindFirstChild("ESPBillboard") then return end
-    
+
+    -- Distance check - FIXED
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local pos = instance:IsA("Model") and instance:GetPivot().Position or instance.Position
+        local dist = (hrp.Position - pos).Magnitude
+        -- Only apply ESP if within reasonable distance (1000 studs)
+        if dist > 1000 then
+            return
+        end
+    end
+
     local highlight, billboard
-    
-    -- Create highlight - parent to MODEL/instance so it highlights all parts
+
+    -- Create highlight
     if instance:IsA("Model") then
         highlight = Instance.new("Highlight")
         highlight.Parent = instance
-        highlight.Adornee = instance -- Highlight entire model
+        highlight.Adornee = instance
         highlight.FillColor = color
         highlight.OutlineColor = Color3.new(color.R * 0.7, color.G * 0.7, color.B * 0.7)
         highlight.FillTransparency = 0.4
@@ -253,7 +289,7 @@ local function ApplyESP(instance, text, color, espType, roomName)
         highlight.OutlineTransparency = 0
         highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     end
-    
+
     -- Create billboard
     billboard = Instance.new("BillboardGui")
     billboard.Parent = instance
@@ -261,7 +297,7 @@ local function ApplyESP(instance, text, color, espType, roomName)
     billboard.AlwaysOnTop = true
     billboard.Size = UDim2.new(0, 150, 0, 50)
     billboard.StudsOffset = Vector3.new(0, 4, 0)
-    
+
     local label = Instance.new("TextLabel")
     label.Parent = billboard
     label.Name = "ESPLabel"
@@ -273,40 +309,56 @@ local function ApplyESP(instance, text, color, espType, roomName)
     label.Text = text
     label.Font = Enum.Font.SourceSansBold
     label.TextSize = 22
-    
+
     ESPRegistry[instance] = {
         highlight = highlight,
         billboard = billboard,
         espType = espType,
         color = color,
-        roomName = roomName or "unknown"
+        roomName = roomName or "unknown",
+        createdAt = tick() -- Track when ESP was created
     }
-    
+
     -- Auto-cleanup when destroyed
     instance.AncestryChanged:Connect(function()
         if not instance:IsDescendantOf(game) then
             ClearESP(instance)
         end
     end)
-    
-    WaveDebug.debug(text .. " ESP applied!")
+
+    debugPrint(text .. " ESP applied!", "DEBUG")
 end
 
-local function UpdateESPColor(espType, newColor)
+-- Update ESP with distance checking
+local function UpdateESPWithDistance()
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local toRemove = {}
+    local currentTime = tick()
+
     for instance, data in pairs(ESPRegistry) do
-        if data.espType == espType then
-            data.color = newColor
-            if data.highlight then
-                data.highlight.FillColor = newColor
-                data.highlight.OutlineColor = Color3.new(newColor.R * 0.7, newColor.G * 0.7, newColor.B * 0.7)
-            end
-            if data.billboard then
-                local label = data.billboard:FindFirstChild("ESPLabel")
-                if label then label.TextColor3 = newColor end
-            end
+        local pos = instance:IsA("Model") and instance:GetPivot().Position or instance.Position
+        local dist = (hrp.Position - pos).Magnitude
+
+        -- Remove ESP if too far or too old
+        if dist > 1000 or (currentTime - data.createdAt > 30) then
+            table.insert(toRemove, instance)
         end
     end
+
+    for _, instance in ipairs(toRemove) do
+        ClearESP(instance)
+    end
 end
+
+-- Clean up ESP every 5 seconds
+task.spawn(function()
+    while true do
+        UpdateESPWithDistance()
+        task.wait(5)
+    end
+end)
 
 -- Rainbow ESP System
 local function hueToRGB(hue)
@@ -340,7 +392,7 @@ local function updateRainbowESP()
             RainbowConnection = nil
 
             -- RESTORE ORIGINAL COLORS when rainbow is disabled
-            WaveDebug.info("Restoring original ESP colors...")
+            debugPrint("Restoring original ESP colors...", "INFO")
             for instance, data in pairs(ESPRegistry) do
                 if data.highlight then
                     data.highlight.FillColor = data.color
@@ -351,7 +403,7 @@ local function updateRainbowESP()
                     if label then label.TextColor3 = data.color end
                 end
             end
-            WaveDebug.info("Original ESP colors restored!")
+            debugPrint("Original ESP colors restored!", "INFO")
         end
         return
     end
@@ -374,7 +426,7 @@ local function updateRainbowESP()
         end
     end)
 
-    WaveDebug.info("Rainbow ESP system activated!")
+    debugPrint("Rainbow ESP system activated!", "INFO")
 end
 
 local function ClearAllESPOfType(espType)
@@ -386,6 +438,22 @@ local function ClearAllESPOfType(espType)
     end
     for _, instance in ipairs(toRemove) do
         ClearESP(instance)
+    end
+end
+
+local function UpdateESPColor(espType, newColor)
+    for instance, data in pairs(ESPRegistry) do
+        if data.espType == espType then
+            data.color = newColor
+            if data.highlight then
+                data.highlight.FillColor = newColor
+                data.highlight.OutlineColor = Color3.new(newColor.R * 0.7, newColor.G * 0.7, newColor.B * 0.7)
+            end
+            if data.billboard then
+                local label = data.billboard:FindFirstChild("ESPLabel")
+                if label then label.TextColor3 = newColor end
+            end
+        end
     end
 end
 
@@ -404,6 +472,25 @@ local function GetRoomName(instance)
     return nil
 end
 
+local function getCurrentRoom()
+    local rooms = CurrentRooms:GetChildren()
+    if #rooms == 0 then return nil end
+
+    -- Find the highest numbered room
+    local highestRoom = nil
+    local highestNum = -1
+
+    for _, room in pairs(rooms) do
+        local num = tonumber(room.Name)
+        if num and num > highestNum then
+            highestNum = num
+            highestRoom = room
+        end
+    end
+
+    return highestRoom
+end
+
 local function ApplyDoorESP(room)
     if not Settings.DoorESP then return end
 
@@ -420,58 +507,33 @@ local function ApplyDoorESP(room)
 
     -- AGGRESSIVE DOOR ESP METHOD - Always find a target
     local doorTarget = nil
-    local methodUsed = "none"
 
     -- Method 1: Main door part
     local doorPart = door:FindFirstChild("Door")
     if doorPart and doorPart:IsA("BasePart") then
         doorTarget = doorPart
-        methodUsed = "main Door part"
     end
 
-    -- Method 2: Door leaf/surface with different names
-    if not doorTarget then
-        local doorNames = {"DoorLeaf", "DoorSurface", "DoorMain", "DoorFrame", "DoorMesh"}
-        for _, name in pairs(doorNames) do
-            local part = door:FindFirstChild(name)
-            if part and part:IsA("BasePart") then
-                doorTarget = part
-                methodUsed = name
-                break
-            end
-        end
-    end
-
-    -- Method 3: ANY visible part inside door (aggressive)
+    -- Method 2: Any visible part inside door
     if not doorTarget then
         for _, part in pairs(door:GetDescendants()) do
-            if part:IsA("BasePart") and part.Transparency < 0.8 then -- More permissive
+            if part:IsA("BasePart") and part.Transparency < 0.8 then
                 doorTarget = part
-                methodUsed = "any visible part"
                 break
             end
         end
     end
 
-    -- Method 4: Primary part
-    if not doorTarget and door.PrimaryPart then
-        doorTarget = door.PrimaryPart
-        methodUsed = "PrimaryPart"
-    end
-
-    -- Method 5: Fallback to entire door model (last resort)
+    -- Method 3: Fallback to entire door model
     if not doorTarget then
         doorTarget = door
-        methodUsed = "entire door model"
     end
 
-    -- ALWAYS apply ESP if we found a target
+    -- Apply ESP if we found a target
     if doorTarget and not HasESP(doorTarget) then
         ApplyESP(doorTarget, text, Settings.DoorESPColor, "Door", room.Name)
         OpenedDoors[door] = {opened = false, espTarget = doorTarget}
-        WaveDebug.info("DOOR ESP APPLIED to room " .. room.Name .. " - Method: " .. methodUsed .. " - Target: " .. doorTarget.Name)
-    else
-        WaveDebug.error("NO TARGET FOUND for door in room " .. room.Name)
+        debugPrint("Door ESP applied to room " .. room.Name, "INFO")
     end
 
     -- Monitor door opening
@@ -485,19 +547,10 @@ local function ApplyDoorESP(room)
                     ClearESP(OpenedDoors[door].espTarget)
                 end
                 OpenedDoors[door] = {opened = true, espTarget = nil}
-                warn(string.format("Door %d opened - ESP cleared", displayNum))
+                debugPrint(string.format("Door %d opened - ESP cleared", displayNum), "INFO")
             end)
         end
     end
-
-    door:GetAttributeChangedSignal("Opened"):Connect(function()
-        if door:GetAttribute("Opened") then
-            if OpenedDoors[door] and OpenedDoors[door].espTarget then
-                ClearESP(OpenedDoors[door].espTarget)
-            end
-            OpenedDoors[door] = {opened = true, espTarget = nil}
-        end
-    end)
 end
 
 local function ApplyKeyESP(key)
@@ -527,7 +580,7 @@ end
 local function ApplyItemESP(item, name)
     if not Settings.ItemESP then return end
     if HasESP(item) then return end
-    
+
     -- Skip items inside furniture
     local parent = item.Parent
     if parent then
@@ -536,12 +589,12 @@ local function ApplyItemESP(item, name)
             return
         end
     end
-    
+
     ApplyESP(item, name, Settings.ItemESPColor, "Item", GetRoomName(item))
 end
 
 -- ═══════════════════════════════════════════════════════════
--- ROOM SCANNER - Single unified scanner
+-- ROOM SCANNER
 -- ═══════════════════════════════════════════════════════════
 
 local ItemNames = {"Lighter", "Flashlight", "Lockpick", "Vitamins", "Crucifix", "Candle", "Battery", "ElectricalRoomKey", "SkeletonKey", "Smoothie"}
@@ -549,40 +602,40 @@ local ItemNames = {"Lighter", "Flashlight", "Lockpick", "Vitamins", "Crucifix", 
 local function ScanRoom(room)
     -- Door
     ApplyDoorESP(room)
-    
+
     -- Scan descendants
     for _, desc in pairs(room:GetDescendants()) do
         local name = desc.Name
-        
+
         -- Key
         if name == "KeyObtain" then
             ApplyKeyESP(desc)
-        
+
         -- Wardrobe (only in Assets folder)
         elseif name == "Wardrobe" then
             local p = desc.Parent
             if p and (p.Name == "Assets" or p.Parent == CurrentRooms) then
                 ApplyWardrobeESP(desc)
             end
-        
+
         -- LeverForGate
         elseif name == "LeverForGate" then
             ApplyObjectiveESP(desc, "LEVER FOR GATE")
-        
+
         -- Other levers/valves
         elseif name:find("Lever") then
             ApplyObjectiveESP(desc, "LEVER")
         elseif name:find("Valve") then
             ApplyObjectiveESP(desc, "VALVE")
-        
+
         -- Library hint
         elseif name == "LibraryHintPaper" then
             ApplyObjectiveESP(desc, "LIBRARY HINT")
-        
+
         -- Gold
         elseif name == "GoldPile" or (name:find("Gold") and desc:IsA("BasePart")) then
             ApplyGoldESP(desc)
-        
+
         -- Items
         else
             for _, itemName in ipairs(ItemNames) do
@@ -617,7 +670,7 @@ local Toggles = Library.Toggles
 
 local Window = Library:CreateWindow({
     Title = "vesper.lua",
-    Footer = "version: v2.1 | latest obsidian-ui v0.12.0",
+    Footer = "version: v2.1 | latest obsidian-ui v0.12.0 | Wave Console Edition",
     Icon = "rbxassetid://87962219786952",
     NotifySide = "Right",
     ShowCustomCursor = true,
@@ -739,8 +792,6 @@ NotifyGroup:AddToggle("NotifyInChat", {
 
 NotifyGroup:AddDivider()
 
--- ScreechProtection moved to Exploits tab
-
 local AuraGroup = Tabs.Main:AddRightGroupbox("Auras", "sparkles")
 
 AuraGroup:AddToggle("LeverValveAura", {
@@ -767,65 +818,26 @@ AuraGroup:AddToggle("LockedDoorAura", {
     Callback = function(Value) Settings.LockedDoorAura = Value end
 })
 
--- New Features Group
-local FeaturesGroup = Tabs.Main:AddRightGroupbox("New Features", "star")
+-- Wave Console Test Group
+local WaveGroup = Tabs.Main:AddRightGroupbox("Wave Console", "terminal")
 
-FeaturesGroup:AddButton({
-    Text = "Clear All ESP",
+WaveGroup:AddButton({
+    Text = "Test Wave Console",
     Callback = function()
-        for instance, data in pairs(ESPRegistry) do
-            ClearESP(instance)
-        end
-        ESPRegistry = {}
-        Library:Notify({Title = "ESP Cleared", Description = "All ESP has been removed", Time = 2})
+        debugPrint("Test message from vesper.lua!", "INFO")
+        rconsoleprint("@@GREEN@@This is green text!\n")
+        rconsolewarn("@@YELLOW@@This is a warning!\n")
+        rconsoleerr("@@RED@@This is an error!\n")
+        rconsoledebug("@@LIGHT_BLUE@@This is debug text!\n")
+        Library:Notify({Title = "Wave Console Test", Description = "Check Wave console for messages", Time = 3})
     end
 })
 
-FeaturesGroup:AddToggle("ShowFPS", {
-    Text = "Show FPS Counter",
-    Default = false,
-    Callback = function(Value)
-        if Value then
-            local fpsGui = Instance.new("ScreenGui")
-            fpsGui.Name = "FPSCounter"
-            fpsGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-            fpsGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-            local label = Instance.new("TextLabel")
-            label.Size = UDim2.new(0, 100, 0, 30)
-            label.Position = UDim2.new(0, 10, 1, -40)
-            label.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-            label.BorderSizePixel = 1
-            label.BorderColor3 = Color3.fromRGB(255, 255, 255)
-            label.TextColor3 = Color3.new(1, 1, 1)
-            label.TextScaled = true
-            label.Font = Enum.Font.Code
-            label.Parent = fpsGui
-
-            local lastTime = tick()
-            local frames = 0
-
-            game:GetService("RunService").Heartbeat:Connect(function()
-                frames = frames + 1
-                local currentTime = tick()
-                if currentTime - lastTime >= 1 then
-                    label.Text = "FPS: " .. frames
-                    frames = 0
-                    lastTime = currentTime
-                end
-            end)
-
-            fpsGui:GetPropertyChangedSignal("Parent"):Connect(function()
-                if not fpsGui.Parent then
-                    FeaturesGroup.Toggles["ShowFPS"]:SetValue(false)
-                end
-            end)
-        else
-            local fpsGui = LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("FPSCounter")
-            if fpsGui then
-                fpsGui:Destroy()
-            end
-        end
+WaveGroup:AddButton({
+    Text = "Clear Console",
+    Callback = function()
+        rconsoleclear()
+        debugPrint("Console cleared", "INFO")
     end
 })
 
@@ -847,7 +859,7 @@ ESPGeneralGroup:AddToggle("RainbowESP", {
     Callback = function(Value)
         Settings.RainbowESP = Value
         updateRainbowESP()
-        WaveDebug.info("Rainbow ESP toggled: " .. tostring(Value))
+        debugPrint("Rainbow ESP toggled: " .. tostring(Value), "INFO")
     end
 })
 
@@ -880,7 +892,12 @@ ESPItemsGroup:AddToggle("DoorESP", {
     Default = false,
     Callback = function(Value)
         Settings.DoorESP = Value
-        if Value then ScanAllRooms() else ClearAllESPOfType("Door") end
+        debugPrint("Door ESP: " .. tostring(Value), "INFO")
+        if Value then
+            ScanAllRooms()
+        else
+            ClearAllESPOfType("Door")
+        end
     end
 }):AddColorPicker("DoorESPColor", {
     Default = Settings.DoorESPColor,
@@ -896,7 +913,7 @@ ESPItemsGroup:AddToggle("ClosetESP", {
     Default = false,
     Callback = function(Value)
         Settings.ClosetESP = Value
-        if Value then ScanAllRooms() else ClearAllESPOfType("Closet") end
+        debugPrint("Closet ESP: " .. tostring(Value), "INFO")
     end
 }):AddColorPicker("ClosetESPColor", {
     Default = Settings.ClosetESPColor,
@@ -912,7 +929,7 @@ ESPItemsGroup:AddToggle("ItemESP", {
     Default = false,
     Callback = function(Value)
         Settings.ItemESP = Value
-        if Value then ScanAllRooms() else ClearAllESPOfType("Item") end
+        debugPrint("Item ESP: " .. tostring(Value), "INFO")
     end
 }):AddColorPicker("ItemESPColor", {
     Default = Settings.ItemESPColor,
@@ -928,7 +945,7 @@ ESPItemsGroup:AddToggle("ObjectiveESP", {
     Default = false,
     Callback = function(Value)
         Settings.ObjectiveESP = Value
-        if Value then ScanAllRooms() else ClearAllESPOfType("Objective") end
+        debugPrint("Objective ESP: " .. tostring(Value), "INFO")
     end
 }):AddColorPicker("ObjectiveESPColor", {
     Default = Settings.ObjectiveESPColor,
@@ -944,7 +961,7 @@ ESPItemsGroup:AddToggle("GoldESP", {
     Default = false,
     Callback = function(Value)
         Settings.GoldESP = Value
-        if Value then ScanAllRooms() else ClearAllESPOfType("Gold") end
+        debugPrint("Gold ESP: " .. tostring(Value), "INFO")
     end
 }):AddColorPicker("GoldESPColor", {
     Default = Settings.GoldESPColor,
@@ -960,7 +977,7 @@ ESPItemsGroup:AddToggle("KeyESP", {
     Default = false,
     Callback = function(Value)
         Settings.KeyESP = Value
-        if Value then ScanAllRooms() else ClearAllESPOfType("Key") end
+        debugPrint("Key ESP: " .. tostring(Value), "INFO")
     end
 }):AddColorPicker("KeyESPColor", {
     Default = Settings.KeyESPColor,
@@ -1147,8 +1164,10 @@ LightingGroup:AddToggle("Fullbright", {
         Settings.Fullbright = Value
         if Value then
             ApplyFullbright()
+            debugPrint("Fullbright enabled", "INFO")
         else
             RestoreLighting()
+            debugPrint("Fullbright disabled", "INFO")
         end
     end
 })
@@ -1162,7 +1181,7 @@ LightingGroup:AddSlider("Brightness", {
     Callback = function(Value)
         Settings.Brightness = Value
         if Settings.Fullbright then
-            game:GetService("Lighting").Brightness = Value
+            Lighting.Brightness = Value
         end
     end
 })
@@ -1215,7 +1234,7 @@ ThemeManager:ApplyToTab(Tabs.Settings)
 
 Library:Notify({
     Title = "vesper.lua loaded!",
-    Description = "DOORS script v2.1 | Press RightShift to toggle",
+    Description = "DOORS script v2.1 Wave Edition | Press RightShift to toggle",
     Time = 5
 })
 
@@ -1230,7 +1249,7 @@ ProtectionGroup:AddToggle("ScreechProtection", {
     Default = false,
     Callback = function(Value)
         Settings.ScreechProtection = Value
-        WaveDebug.info("Screech protection: " .. tostring(Value))
+        debugPrint("Screech protection: " .. tostring(Value), "INFO")
     end
 }):AddTooltip("Protects from Screech jumpscare")
 
@@ -1239,7 +1258,7 @@ ProtectionGroup:AddToggle("EyesProtection", {
     Default = false,
     Callback = function(Value)
         Settings.ScreechProtection = Value -- Uses same setting
-        WaveDebug.info("Eyes protection: " .. tostring(Value))
+        debugPrint("Eyes protection: " .. tostring(Value), "INFO")
     end
 }):AddTooltip("Makes Eyes visible but harmless")
 
@@ -1437,13 +1456,14 @@ end)
 -- Clean up ESP when rooms are removed (player moves forward)
 CurrentRooms.ChildRemoved:Connect(function(room)
     ClearESPInRoom(room.Name)
-    warn("Room " .. room.Name .. " removed - ESP cleared")
+    debugPrint("Room " .. room.Name .. " removed - ESP cleared", "INFO")
 end)
 
+-- Continuous monitoring for new items
 CurrentRooms.DescendantAdded:Connect(function(desc)
     task.wait(0.1)
     local name = desc.Name
-    
+
     if name == "KeyObtain" then ApplyKeyESP(desc)
     elseif name == "Wardrobe" then
         local p = desc.Parent
@@ -1465,65 +1485,24 @@ CurrentRooms.DescendantAdded:Connect(function(desc)
     end
 end)
 
--- Initial scan after delay + continuous door check
+-- Initial scan after delay
 task.spawn(function()
     task.wait(1.5)
     ScanAllRooms()
-    WaveDebug.info("Initial room scan complete!")
-
-    -- CONTINUOUS DOOR ESP CHECK - catch any missed doors
-    while true do
-        task.wait(2) -- Check every 2 seconds
-
-        if Settings.DoorESP then
-            local doorsChecked = 0
-            local doorsFound = 0
-
-            for _, room in pairs(CurrentRooms:GetChildren()) do
-                if room:IsA("Model") then
-                    doorsChecked = doorsChecked + 1
-
-                    local door = room:FindFirstChild("Door")
-                    if door then
-                        doorsFound = doorsFound + 1
-
-                        -- Check if this door already has ESP
-                        local hasESP = false
-                        for instance, data in pairs(ESPRegistry) do
-                            if data.espType == "Door" and instance:IsDescendantOf(door) then
-                                hasESP = true
-                                break
-                            end
-                        end
-
-                        -- Apply ESP if missing
-                        if not hasESP then
-                            WaveDebug.info("Found door without ESP in room " .. room.Name .. " - applying now")
-                            ApplyDoorESP(room)
-                        end
-                    end
-                end
-            end
-
-            if doorsChecked > 0 then
-                WaveDebug.debug("Door ESP check: " .. doorsFound .. "/" .. doorsChecked .. " doors have ESP")
-            end
-        end
-    end
+    debugPrint("Initial room scan complete!", "INFO")
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- ENTITY DETECTION (Rush, Ambush, Eyes, Screech)
+-- ENTITY DETECTION
 -- ═══════════════════════════════════════════════════════════
 
 local EntityTracked = {}
-local LastEyesNotification = 0 -- Prevent notification spam
 
 local function SetupEntityESP(entity, name, color)
     if EntityTracked[entity] then return end
     EntityTracked[entity] = true
 
-    warn(name .. " SPAWNED!")
+    debugPrint(name .. " SPAWNED!", "WARN")
 
     if Settings.EntityNotify then
         Library:Notify({Title = name .. " DETECTED", Description = "Entity approaching - hide!", Time = 5})
@@ -1556,17 +1535,8 @@ local function SetupEntityESP(entity, name, color)
     label.TextScaled = true
 
     task.spawn(function()
-        local retryCount = 0
-        local maxRetries = 50 -- Allow up to 5 seconds of retries
-
-        while retryCount < maxRetries do
+        while entity and entity.Parent do
             pcall(function()
-                -- Check if entity still exists and is parented
-                if not entity or not entity.Parent then
-                    retryCount = maxRetries -- Exit loop
-                    return
-                end
-
                 -- Update visibility based on current setting
                 highlight.Enabled = Settings.EntityESP
                 billboard.Enabled = Settings.EntityESP
@@ -1577,524 +1547,32 @@ local function SetupEntityESP(entity, name, color)
                     local dist = math.floor((hrp.Position - pos).Magnitude)
                     label.Text = name .. " - " .. dist .. " studs"
                 end
-
-                retryCount = 0 -- Reset retry count if successful
             end)
-
-            -- If entity still exists, wait and continue
-            if entity and entity.Parent then
-                task.wait(0.1)
-            else
-                break
-            end
+            task.wait(0.5)
         end
 
         -- Cleanup
         EntityTracked[entity] = nil
-        warn(name .. " despawned or ESP ended")
+        debugPrint(name .. " despawned", "DEBUG")
     end)
 end
 
--- Improved Entity Detection with spawn monitoring
-local function setupEntityDetection()
-    -- Rush detection with multiple fallbacks
-    Workspace.ChildAdded:Connect(function(child)
-        if child.Name == "RushMoving" then
-            SetupEntityESP(child, "RUSH", Color3.fromRGB(255, 25, 25))
-            warn("Rush spawned - ESP applied immediately")
-        elseif child.Name == "AmbushMoving" then
-            SetupEntityESP(child, "AMBUSH", Color3.fromRGB(255, 100, 0))
-            warn("Ambush spawned - ESP applied immediately")
-        end
-    end)
-
-    -- Continuous monitoring for entities that might be missed
-    RunService.Heartbeat:Connect(function()
-        -- Rush (check multiple possible names)
-        local rush = Workspace:FindFirstChild("RushMoving")
-        if rush then
-            SetupEntityESP(rush, "RUSH", Color3.fromRGB(255, 25, 25))
-        end
-
-        -- Also check for alternative Rush names
-        local rush2 = Workspace:FindFirstChild("Rush")
-        if rush2 and rush2 ~= rush then
-            SetupEntityESP(rush2, "RUSH", Color3.fromRGB(255, 25, 25))
-        end
-
-        -- Ambush
-        local ambush = Workspace:FindFirstChild("AmbushMoving")
-        if ambush then
-            SetupEntityESP(ambush, "AMBUSH", Color3.fromRGB(255, 100, 0))
-        end
-
-        -- Eyes ESP is now handled by setupOriginalEyesDetection()
-    end)
-end
-
--- Initialize entity detection
-setupEntityDetection()
-
--- Eyes spawn detection is handled by setupOriginalEyesDetection() function
-
--- COMPREHENSIVE EYES PROTECTION - Block ALL damage methods
-local function setupComprehensiveEyesProtection()
-    local protected = false
-    local originalMethods = {}
-
-    -- Method 1: Hook ALL raycasting functions
-    local function hookRaycasting()
-        originalMethods.Raycast = workspace.Raycast
-        originalMethods.FindPartOnRay = workspace.FindPartOnRay
-        originalMethods.FindPartOnRayWithIgnoreList = workspace.FindPartOnRayWithIgnoreList
-        originalMethods.RaycastWithParams = workspace.RaycastWithParams or function() end
-
-        -- Hook workspace.Raycast
-        workspace.Raycast = function(origin, direction, raycastParams, extras)
-            local result = originalMethods.Raycast(origin, direction, raycastParams, extras)
-
-            if Settings.ScreechProtection and result then
-                local hitPart = result.Instance
-                if hitPart and (hitPart.Name == "Eyes" or hitPart.Name == "Core" or
-                   hitPart:IsDescendantOf(workspace:FindFirstChild("Eyes"))) then
-                    WaveDebug.debug("Blocked Eyes raycast to " .. hitPart.Name)
-                    return nil
-                end
-            end
-            return result
-        end
-
-        -- Hook FindPartOnRay
-        workspace.FindPartOnRay = function(ray, ignoreDescendantsInstance, terrainCellsAreCubes, ignoreWater)
-            local result = originalMethods.FindPartOnRay(ray, ignoreDescendantsInstance, terrainCellsAreCubes, ignoreWater)
-
-            if Settings.ScreechProtection and result then
-                if result.Instance and (result.Instance.Name == "Eyes" or result.Instance.Name == "Core" or
-                   result.Instance:IsDescendantOf(workspace:FindFirstChild("Eyes"))) then
-                    WaveDebug.debug("Blocked Eyes FindPartOnRay")
-                    return nil
-                end
-            end
-            return result
-        end
-
-        -- Hook FindPartOnRayWithIgnoreList
-        workspace.FindPartOnRayWithIgnoreList = function(ray, ignoreDescendantsInstances, terrainCellsAreCubes)
-            local result = originalMethods.FindPartOnRayWithIgnoreList(ray, ignoreDescendantsInstances, terrainCellsAreCubes)
-
-            if Settings.ScreechProtection and result then
-                if result.Instance and (result.Instance.Name == "Eyes" or result.Instance.Name == "Core" or
-                   result.Instance:IsDescendantOf(workspace:FindFirstChild("Eyes"))) then
-                    WaveDebug.debug("Blocked Eyes FindPartOnRayWithIgnoreList")
-                    return nil
-                end
-            end
-            return result
-        end
-    end
-
-    -- Method 2: Destroy/disable Eyes components
-    local function disableEyesComponents(eyes)
-        if not eyes then return end
-
-        -- Disable Core part
-        local core = eyes:FindFirstChild("Core")
-        if core then
-            -- Make Core completely non-interactive
-            core.CanCollide = false
-            core.CanTouch = false
-            core.Anchored = true
-
-            -- Disable any scripts in Core
-            for _, child in pairs(core:GetDescendants()) do
-                if child:IsA("Script") or child:IsA("LocalScript") then
-                    child:Destroy()
-                end
-            end
-
-            -- Disable EyesParticle
-            local particle = core:FindFirstChild("Attachment") and core.Attachment:FindFirstChild("EyesParticle")
-            if particle then
-                particle.Enabled = false
-                particle:Emit(0)
-            end
-        end
-
-        -- Disable all scripts in entire Eyes model
-        for _, script in pairs(eyes:GetDescendants()) do
-            if script:IsA("Script") or script:IsA("LocalScript") then
-                script:Destroy()
-            end
-        end
-    end
-
-    -- Method 3: Create protective barrier
-    local function createProtectiveBarrier(eyes)
-        if not eyes or not LocalPlayer.Character then return end
-
-        local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-
-        -- Create multiple invisible parts
-        for i = 1, 5 do
-            local barrier = Instance.new("Part")
-            barrier.Name = "EyesBarrier_" .. i
-            barrier.Size = Vector3.new(10, 20, 1)
-            barrier.Material = Enum.Material.ForceField
-            barrier.Transparency = 1
-            barrier.CanCollide = true
-            barrier.Anchored = true
-            barrier.Position = eyes.Position
-
-            -- Calculate angle
-            local angle = (math.pi * 2 / 5) * i
-            local offset = Vector3.new(math.cos(angle) * 8, 0, math.sin(angle) * 8)
-            barrier.CFrame = CFrame.new(eyes.Position + offset, eyes.Position)
-            barrier.Parent = workspace
-
-            task.delay(0.5, function()
-                if barrier then barrier:Destroy() end
-            end)
-        end
-    end
-
-    -- Method 4: Override ALL damage methods
-    local function overrideDamageMethods()
-        if not LocalPlayer.Character then return end
-
-        local hum = LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
-        if hum then
-            -- Override TakeDamage
-            originalMethods.TakeDamage = hum.TakeDamage
-            hum.TakeDamage = function(self, amount)
-                if Settings.ScreechProtection and workspace:FindFirstChild("Eyes") then
-                    WaveDebug.debug("Blocked " .. amount .. " damage from Eyes!")
-                    return
-                end
-                return originalMethods.TakeDamage(self, amount)
-            end
-
-            -- Override Health property
-            originalMethods.Health = hum.Health
-            hum:GetPropertyChangedSignal("Health"):Connect(function()
-                if Settings.ScreechProtection and workspace:FindFirstChild("Eyes") and hum.Health < originalMethods.Health then
-                    WaveDebug.debug("Restored health from Eyes damage!")
-                    hum.Health = originalMethods.Health
-                end
-            end)
-
-            -- Set health to maximum
-            hum.MaxHealth = 100
-            hum.Health = 100
-        end
-    end
-
-    -- Main protection function
-    local function protectFromEyes()
-        local eyes = Workspace:FindFirstChild("Eyes")
-        if eyes and Settings.ScreechProtection and not protected then
-            protected = true
-
-            warn("👁️ EYES DETECTED - ACTIVATING COMPREHENSIVE PROTECTION!")
-
-            if Settings.EntityNotify then
-                Library:Notify({Title = "👁️ ULTIMATE EYES PROTECTION", Description = "All damage methods blocked!", Time = 3})
-            end
-
-            -- Apply all protection methods
-            hookRaycasting()
-            disableEyesComponents(eyes)
-            overrideDamageMethods()
-
-            -- Continuous protection
-            task.spawn(function()
-                while eyes and eyes.Parent and Settings.ScreechProtection do
-                    -- Re-disable components periodically
-                    disableEyesComponents(eyes)
-                    createProtectiveBarrier(eyes)
-
-                    -- Ensure health stays full
-                    if LocalPlayer.Character then
-                        local hum = LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
-                        if hum and hum.Health < 100 then
-                            hum.Health = 100
-                        end
-                    end
-
-                    task.wait(0.1)
-                end
-                protected = false
-            end)
-        end
-    end
-
-    -- Monitor for Eyes
-    task.spawn(function()
-        while true do
-            protectFromEyes()
-            task.wait(0.1)
-        end
-    end)
-
-    -- Spawn detection
-    Workspace.ChildAdded:Connect(function(child)
-        if child.Name == "Eyes" and Settings.ScreechProtection then
-            task.wait(0.01) -- Immediate protection
-            protectFromEyes()
-        end
-    end)
-
-    -- ESP
-    local function checkForEyesESP()
-        local EyesModel = Workspace:FindFirstChild("Eyes")
-        if EyesModel and not EyesModel:GetAttribute("ESPAdded") and Settings.EntityESP then
-            EyesModel:SetAttribute("ESPAdded", true)
-
-            local highlight = Instance.new("Highlight")
-            highlight.Parent = EyesModel
-            highlight.FillColor = Color3.fromRGB(255, 255, 0)
-            highlight.OutlineColor = Color3.new(1, 1, 0)
-            highlight.FillTransparency = 0.2
-            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-
-            local billboard = Instance.new("BillboardGui")
-            billboard.Parent = EyesModel
-            billboard.Size = UDim2.new(0, 200, 0, 50)
-            billboard.StudsOffset = Vector3.new(0, 5, 0)
-            billboard.AlwaysOnTop = true
-
-            local label = Instance.new("TextLabel")
-            label.Parent = billboard
-            label.Size = UDim2.new(1, 0, 1, 0)
-            label.BackgroundTransparency = 1
-            label.TextColor3 = Color3.new(1, 1, 0)
-            label.TextStrokeTransparency = 0
-            label.TextStrokeColor3 = Color3.new(0, 0, 0)
-            label.TextScaled = true
-            label.Font = Enum.Font.GothamBold
-
-            task.spawn(function()
-                while EyesModel and EyesModel.Parent do
-                    pcall(function()
-                        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                        if hrp then
-                            local dist = math.floor((hrp.Position - EyesModel.Position).Magnitude)
-                            label.Text = "👁️ EYES - " .. dist .. " studs (100% Protected)"
-                        end
-                    end)
-                    task.wait(0.5)
-                end
-
-                if highlight then highlight:Destroy() end
-                if billboard then billboard:Destroy() end
-            end)
-        end
-    end
-
-    RunService.Heartbeat:Connect(checkForEyesESP)
-end
-
--- Initialize comprehensive Eyes protection
-setupComprehensiveEyesProtection()
-
--- NUCLEAR OPTION - Complete ESP cleanup every frame
-task.spawn(function()
-    while true do
-        task.wait(0.1) -- Every 100ms - NUCLEAR
-
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            local CurrentRoom = getCurrentRoom()
-
-            -- WIPE ALL ESP NOT IN CURRENT ROOM
-            local function isInCurrentRoom(item)
-                if not CurrentRoom then return true end
-                local parent = item.Parent
-                while parent and parent ~= game and parent ~= workspace do
-                    if parent == CurrentRoom then
-                        return true
-                    end
-                    parent = parent.Parent
-                end
-                return false
-            end
-
-            -- Direct workspace scan for ALL ESP elements
-            for _, item in pairs(Workspace:GetDescendants()) do
-                -- Check for ANY ESP element
-                local hasESP = false
-                if item:FindFirstChildWhichIsA("Highlight") or
-                   item:FindFirstChild("ESPBillboard") or
-                   item:FindFirstChild("ESPLabel") then
-                    hasESP = true
-                end
-
-                -- If it has ESP and is not in current room, NUKE IT
-                if hasESP and not isInCurrentRoom(item) then
-                    -- Keep entities but destroy everything else
-                    local isEntity = item.Name:lower():find("rush") or
-                                  item.Name:lower():find("ambush") or
-                                  item.Name:lower():find("eyes") or
-                                  item.Name:lower():find("screech")
-
-                    if not isEntity then
-                        -- DESTROY EVERYTHING
-                        for _, child in pairs(item:GetChildren()) do
-                            if child:IsA("Highlight") or child:IsA("BillboardGui") or child.Name:find("ESP") then
-                                child:Destroy()
-                            end
-                        end
-                        ESPRegistry[item] = nil
-                    end
-                end
-            end
-        end
-    end
-end)
-
--- Screech protection (safe check)
-task.spawn(function()
-    while true do
-        task.wait(0.2)
-        if Settings.ScreechProtection then
-            pcall(function()
-                local screech = Workspace:FindFirstChild("Screech", true)
-                if screech then
-                    screech:Destroy()
-                    warn("Screech blocked!")
-                    if Settings.EntityNotify then
-                        Library:Notify({Title = "SCREECH BLOCKED", Description = "Screech removed", Time = 3})
-                    end
-                end
-            end)
-        end
+-- Entity detection
+Workspace.ChildAdded:Connect(function(child)
+    if child.Name == "RushMoving" then
+        SetupEntityESP(child, "RUSH", Color3.fromRGB(255, 25, 25))
+    elseif child.Name == "AmbushMoving" then
+        SetupEntityESP(child, "AMBUSH", Color3.fromRGB(255, 100, 0))
+    elseif child.Name == "Eyes" then
+        SetupEntityESP(child, "EYES", Color3.fromRGB(255, 255, 0))
     end
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- GLOBAL SYSTEMS
+-- MOVEMENT SYSTEMS
 -- ═══════════════════════════════════════════════════════════
 
--- Proximity prompt monitor
-workspace.DescendantAdded:Connect(function(desc)
-    if desc:IsA("ProximityPrompt") then
-        task.wait(0.1)
-        if Settings.InstantInteract then desc.HoldDuration = 0 end
-        local isDoor = desc:FindFirstAncestorOfClass("Model") and desc:FindFirstAncestorOfClass("Model").Name == "Door"
-        if isDoor and Settings.DoorReach then desc.MaxActivationDistance = 20 end
-    end
-end)
-
--- Break void
-RunService.Heartbeat:Connect(function()
-    if Settings.BreakVoid and LocalPlayer.Character then
-        local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if hrp and hrp.Position.Y < -200 then
-            hrp.CFrame = hrp.CFrame + Vector3.new(0, 400, 0)
-            warn("Prevented void fall!")
-        end
-    end
-end)
-
--- Fullbright system (store originals and apply once, not every frame)
-local Lighting = game:GetService("Lighting")
-local OriginalLighting = {
-    Ambient = Lighting.Ambient,
-    Brightness = Lighting.Brightness,
-    FogEnd = Lighting.FogEnd,
-    GlobalShadows = Lighting.GlobalShadows,
-    OutdoorAmbient = Lighting.OutdoorAmbient
-}
-
-ApplyFullbright = function()
-    if Settings.Fullbright then
-        Lighting.Ambient = Color3.new(1, 1, 1)
-        Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
-        Lighting.Brightness = Settings.Brightness
-        Lighting.FogEnd = 100000
-        Lighting.GlobalShadows = false
-    end
-end
-
-RestoreLighting = function()
-    Lighting.Ambient = OriginalLighting.Ambient
-    Lighting.OutdoorAmbient = OriginalLighting.OutdoorAmbient
-    Lighting.Brightness = OriginalLighting.Brightness
-    Lighting.FogEnd = OriginalLighting.FogEnd
-    Lighting.GlobalShadows = OriginalLighting.GlobalShadows
-end
-
--- Only re-apply when game tries to change lighting (not every frame)
-local lastFullbrightApply = 0
-Lighting:GetPropertyChangedSignal("Brightness"):Connect(function()
-    if Settings.Fullbright and tick() - lastFullbrightApply > 0.1 then
-        lastFullbrightApply = tick()
-        task.defer(ApplyFullbright)
-    end
-end)
-
-Lighting:GetPropertyChangedSignal("Ambient"):Connect(function()
-    if Settings.Fullbright and tick() - lastFullbrightApply > 0.1 then
-        lastFullbrightApply = tick()
-        task.defer(ApplyFullbright)
-    end
-end)
-
--- ═══════════════════════════════════════════════════════════
--- AURA SYSTEMS
--- ═══════════════════════════════════════════════════════════
-
-task.spawn(function()
-    while true do
-        task.wait(0.4)
-        if LocalPlayer.Character then
-            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                for _, room in pairs(CurrentRooms:GetChildren()) do
-                    for _, desc in pairs(room:GetDescendants()) do
-                        local prompt = desc:FindFirstChildOfClass("ProximityPrompt")
-                        if prompt then
-                            local targetPos = desc:IsA("Model") and desc:GetPivot().Position or (desc:IsA("BasePart") and desc.Position)
-                            if targetPos then
-                                local dist = (hrp.Position - targetPos).Magnitude
-                                
-                                -- Lever/Valve Aura
-                                if Settings.LeverValveAura and (desc.Name:find("Lever") or desc.Name:find("Valve")) and dist <= 15 then
-                                    if fireproximityprompt then pcall(function() fireproximityprompt(prompt) end) end
-                                end
-                                
-                                -- Loot Aura
-                                if Settings.LootAura and (desc.Name:find("Drawer") or desc.Name == "ChestBox" or desc.Name == "Smoothie") and dist <= 12 then
-                                    if fireproximityprompt then pcall(function() fireproximityprompt(prompt) end) end
-                                end
-                                
-                                -- Locked Door Aura
-                                if Settings.LockedDoorAura and desc.Name == "Lock" and dist <= 15 then
-                                    if fireproximityprompt then pcall(function() fireproximityprompt(prompt) end) end
-                                end
-                            end
-                        end
-                        
-                        -- Auto books
-                        if Settings.AutoCollectBooks and desc.Name == "Book" then
-                            local cd = desc:FindFirstChild("ClickDetector")
-                            if cd then
-                                local dist = (hrp.Position - desc.Position).Magnitude
-                                if dist <= 15 and fireclickdetector then
-                                    pcall(function() fireclickdetector(cd) end)
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-end)
-
--- ═══════════════════════════════════════════════════════════
--- NOCLIP
--- ═══════════════════════════════════════════════════════════
-
+-- Noclip
 local noclip = false
 local noclipConn
 
@@ -2102,7 +1580,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     if input.KeyCode == Enum.KeyCode.Q then
         noclip = not noclip
-        warn("Noclip:", noclip and "ON" or "OFF")
+        debugPrint("Noclip: " .. (noclip and "ON" or "OFF"), "INFO")
         if noclip then
             noclipConn = RunService.Stepped:Connect(function()
                 if LocalPlayer.Character then
@@ -2128,488 +1606,43 @@ LocalPlayer.CharacterAdded:Connect(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- MOVEMENT SYSTEMS - All Missing Features Implemented
+-- GLOBAL SYSTEMS
 -- ═══════════════════════════════════════════════════════════
 
--- Get references to DOORS movement system if available
-local MainGame = LocalPlayer:FindFirstChild("PlayerScripts") and
-                 LocalPlayer.PlayerScripts:FindFirstChild("MainGame")
-
--- Store original values
-local OriginalWalkSpeed = 16
-local OriginalJumpPower = 50
-local OriginalHipHeight = 0
-local SpeedBoostConnection = nil
-
--- ═══════════════════════════════════════════════════════════
--- SPEED BOOST SYSTEM
--- ═══════════════════════════════════════════════════════════
-
-local function UpdateSpeedBoost()
-    if not LocalPlayer.Character then return end
-    local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return end
-
-    if Settings.SpeedBoost then
-        local boostMultiplier = Settings.SpeedBypass and 2.5 or 1.8
-        local targetSpeed = OriginalWalkSpeed * boostMultiplier
-
-        if Settings.NoAcceleration then
-            humanoid.WalkSpeed = targetSpeed
-            humanoid.JumpPower = OriginalJumpPower * 1.5
-        else
-            -- Smooth speed transition
-            local currentSpeed = humanoid.WalkSpeed
-            local steps = 10
-            local increment = (targetSpeed - currentSpeed) / steps
-
-            for i = 1, steps do
-                humanoid.WalkSpeed = currentSpeed + (increment * i)
-                task.wait(0.05)
-            end
-        end
-    else
-        humanoid.WalkSpeed = OriginalWalkSpeed
-        humanoid.JumpPower = OriginalJumpPower
-    end
-end
-
--- Update speed boost when character loads
-LocalPlayer.CharacterAdded:Connect(function(char)
-    char:WaitForChild("Humanoid")
-    task.wait(0.1)
-    OriginalWalkSpeed = char:WaitForChild("Humanoid").WalkSpeed
-    OriginalJumpPower = char:WaitForChild("Humanoid").JumpPower
-    UpdateSpeedBoost()
-end)
-
--- ═══════════════════════════════════════════════════════════
--- FLY SYSTEM
--- ═══════════════════════════════════════════════════════════
-
-local FlyVelocity = nil
-local FlyEnabled = false
-local FlyConnections = {}
-
-local function ToggleFly()
-    if not LocalPlayer.Character then return end
-    local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    local rootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not humanoid or not rootPart then return end
-
-    FlyEnabled = not FlyEnabled
-
-    if FlyEnabled then
-        -- Enable fly
-        humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-
-        -- Create body velocity for smooth flying
-        FlyVelocity = Instance.new("BodyVelocity")
-        FlyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-        FlyVelocity.Velocity = Vector3.new(0, 0, 0)
-        FlyVelocity.Parent = rootPart
-
-        -- Create body gyro for stability
-        local FlyGyro = Instance.new("BodyGyro")
-        FlyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-        FlyGyro.P = 10000
-        FlyGyro.CFrame = workspace.CurrentCamera.CFrame
-        FlyGyro.Parent = rootPart
-
-        -- Gravity removal
-        rootPart:FindFirstChildOfClass("BodyGyro").MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-
-        -- Flight controls
-        local flyConn
-        flyConn = RunService.Heartbeat:Connect(function()
-            if not FlyEnabled or not LocalPlayer.Character or not LocalPlayer.Character.Parent then
-                flyConn:Disconnect()
-                return
-            end
-
-            local moveVector = Vector3.new(0, 0, 0)
-            local cam = workspace.CurrentCamera
-            local flySpeed = Settings.FlySpeed * 50
-
-            -- WASD movement (camera-relative)
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                moveVector = moveVector + cam.CFrame.LookVector * flySpeed
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                moveVector = moveVector - cam.CFrame.LookVector * flySpeed
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                moveVector = moveVector - cam.CFrame.RightVector * flySpeed
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                moveVector = moveVector + cam.CFrame.RightVector * flySpeed
-            end
-
-            -- Vertical movement
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                moveVector = moveVector + Vector3.new(0, flySpeed, 0)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-                moveVector = moveVector - Vector3.new(0, flySpeed, 0)
-            end
-
-            -- Speed boost with Shift
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-                moveVector = moveVector * 2
-            end
-
-            if FlyVelocity then
-                FlyVelocity.Velocity = moveVector
-            end
-
-            if FlyGyro then
-                FlyGyro.CFrame = cam.CFrame
-            end
-        end)
-
-        table.insert(FlyConnections, flyConn)
-        warn("Fly enabled! WASD/Space/Ctrl to move")
-
-    else
-        -- Disable fly
-        humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-
-        if FlyVelocity then
-            FlyVelocity:Destroy()
-            FlyVelocity = nil
-        end
-
-        local gyro = rootPart:FindFirstChildOfClass("BodyGyro")
-        if gyro then gyro:Destroy() end
-
-        -- Clean up connections
-        for _, conn in pairs(FlyConnections) do
-            if conn then conn:Disconnect() end
-        end
-        FlyConnections = {}
-
-        warn("Fly disabled")
-    end
-end
-
--- ═══════════════════════════════════════════════════════════
--- TELEPORT SYSTEM
--- ═══════════════════════════════════════════════════════════
-
-local TeleportTarget = nil
-local TeleportBeam = nil
-
-local function CreateTeleportBeam(targetPos)
-    if TeleportBeam then TeleportBeam:Destroy() end
-
-    TeleportBeam = Instance.new("Beam")
-    TeleportBeam.Attachment0 = Instance.new("Attachment", LocalPlayer.Character:WaitForChild("HumanoidRootPart"))
-    TeleportBeam.Attachment1 = Instance.new("Attachment", workspace.Terrain or workspace)
-    TeleportBeam.Attachment1.WorldPosition = targetPos
-    TeleportBeam.Color = ColorSequence.new(Color3.fromRGB(0, 255, 255))
-    TeleportBeam.Width0 = 2
-    TeleportBeam.Width1 = 2
-    TeleportBeam.FaceCamera = true
-    TeleportBeam.Transparency = NumberSequence.new(0, 0.8)
-    TeleportBeam.Parent = workspace.CurrentCamera
-end
-
-local function TeleportTo(position)
-    if not LocalPlayer.Character or not Settings.TeleportEnabled then return end
-    local rootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
-
-    -- Create visual effect
-    CreateTeleportBeam(position)
-
-    -- Smooth teleport
-    local startCFrame = rootPart.CFrame
-    local endCFrame = CFrame.new(position)
-    local duration = 0.2
-    local startTime = tick()
-
-    local conn
-    conn = RunService.Heartbeat:Connect(function()
-        local elapsed = tick() - startTime
-        local alpha = math.min(elapsed / duration, 1)
-
-        -- Smooth interpolation
-        rootPart.CFrame = startCFrame:Lerp(endCFrame, alpha)
-
-        if alpha >= 1 then
-            conn:Disconnect()
-            if TeleportBeam then
-                TeleportBeam:Destroy()
-                TeleportBeam = nil
-            end
-        end
-    end)
-end
-
--- Teleport controls
-UserInputService.InputBegan:Connect(function(input, processed)
-    if processed or not Settings.TeleportEnabled then return end
-
-    if input.UserInputType == Enum.UserInputType.MouseButton1 and UserInputService:IsKeyDown(Enum.KeyCode.LeftAlt) then
-        -- Alt + Click to teleport
-        local mouseLocation = UserInputService:GetMouseLocation()
-        local ray = workspace.CurrentCamera:ViewportPointToRay(mouseLocation.X, mouseLocation.Y)
-        local result = workspace:Raycast(ray.Origin, ray.Direction * 1000)
-
-        if result then
-            TeleportTo(result.Position + Vector3.new(0, 3, 0))
-        end
-    end
-
-    -- Number keys for saved positions
-    if input.KeyCode >= Enum.KeyCode.One and input.KeyCode <= Enum.KeyCode.Nine then
-        local index = input.KeyCode.Value - Enum.KeyCode.One.Value + 1
-        -- Could implement saved teleport positions here
+-- Proximity prompt monitor
+workspace.DescendantAdded:Connect(function(desc)
+    if desc:IsA("ProximityPrompt") then
+        task.wait(0.1)
+        if Settings.InstantInteract then desc.HoldDuration = 0 end
+        local isDoor = desc:FindFirstAncestorOfClass("Model") and desc:FindFirstAncestorOfClass("Model").Name == "Door"
+        if isDoor and Settings.DoorReach then desc.MaxActivationDistance = 20 end
     end
 end)
 
--- ═══════════════════════════════════════════════════════════
--- FREECAM SYSTEM
--- ═══════════════════════════════════════════════════════════
-
-local FreecamEnabled = false
-local FreecamCamera = nil
-local OriginalCamera = workspace.CurrentCamera
-local FreecamCFrame = CFrame.new()
-local FreecamVelocity = Vector3.new()
-
-local function ToggleFreecam()
-    FreecamEnabled = not FreecamEnabled
-
-    if FreecamEnabled then
-        -- Save original camera
-        OriginalCamera = workspace.CurrentCamera.CameraSubject
-
-        -- Set camera to freecam mode
-        workspace.CurrentCamera.CameraSubject = nil
-        workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
-
-        -- Start at player position
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            FreecamCFrame = LocalPlayer.Character.HumanoidRootPart.CFrame
-        end
-
-        -- Freecam controls
-        local freecamConn
-        freecamConn = RunService.Heartbeat:Connect(function()
-            if not FreecamEnabled then
-                freecamConn:Disconnect()
-                return
-            end
-
-            local cam = workspace.CurrentCamera
-            local speed = 20
-            local multiplier = 1
-
-            -- Speed modifiers
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-                multiplier = 3
-            elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-                multiplier = 0.5
-            end
-
-            local moveVector = Vector3.new(0, 0, 0)
-
-            -- Movement
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                moveVector = moveVector + cam.CFrame.LookVector * speed * multiplier
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                moveVector = moveVector - cam.CFrame.LookVector * speed * multiplier
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                moveVector = moveVector - cam.CFrame.RightVector * speed * multiplier
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                moveVector = moveVector + cam.CFrame.RightVector * speed * multiplier
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                moveVector = moveVector + Vector3.new(0, speed * multiplier, 0)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftAlt) then
-                moveVector = moveVector - Vector3.new(0, speed * multiplier, 0)
-            end
-
-            -- Smooth movement
-            FreecamVelocity = FreecamVelocity:Lerp(moveVector, 0.1)
-            FreecamCFrame = FreecamCFrame + FreecamVelocity
-
-            cam.CFrame = FreecamCFrame
-        end)
-
-        warn("Freecam enabled! WASD/Space/Alt to move")
-
-    else
-        -- Restore original camera
-        workspace.CurrentCamera.CameraSubject = OriginalCamera
-        workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
-
-        -- Reset to player
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            workspace.CurrentCamera.CFrame = LocalPlayer.Character.HumanoidRootPart.CFrame
-        end
-
-        warn("Freecam disabled")
-    end
-end
-
--- ═══════════════════════════════════════════════════════════
--- THIRD PERSON SYSTEM
--- ═══════════════════════════════════════════════════════════
-
-local ThirdPersonEnabled = false
-local OriginalCameraOffset = Vector3.new(0, 0, 0)
-local ThirdPersonConnection = nil
-
-local function UpdateThirdPerson()
-    if not LocalPlayer.Character or not workspace.CurrentCamera then return end
-
-    if Settings.ThirdPerson then
-        local rootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if rootPart then
-            local offset = Vector3.new(Settings.ThirdOffset, 0, -Settings.ThirdDistance)
-            local heightOffset = Vector3.new(0, Settings.ThirdHeight, 0)
-            local cameraCFrame = rootPart.CFrame:ToWorldSpace(CFrame.new(offset + heightOffset))
-
-            -- Look at player
-            local lookAtCFrame = CFrame.new(cameraCFrame.Position, rootPart.Position + Vector3.new(0, Settings.ThirdHeight, 0))
-
-            -- Apply smoothing
-            local currentCamCFrame = workspace.CurrentCamera.CFrame
-            local smoothness = 0.1 * Settings.ThirdSensitivity
-            workspace.CurrentCamera.CFrame = currentCamCFrame:Lerp(lookAtCFrame, smoothness)
-        end
-    end
-end
-
-local function ToggleThirdPerson()
-    ThirdPersonEnabled = Settings.ThirdPerson
-
-    if ThirdPersonEnabled then
-        -- Store original camera settings
-        OriginalCameraOffset = workspace.CurrentCamera.CFrame.Position -
-                              (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and
-                               LocalPlayer.Character.HumanoidRootPart.Position or Vector3.new())
-
-        -- Start third person update loop
-        ThirdPersonConnection = RunService.Heartbeat:Connect(UpdateThirdPerson)
-
-        warn("Third person enabled")
-    else
-        -- Restore original camera
-        if ThirdPersonConnection then
-            ThirdPersonConnection:Disconnect()
-            ThirdPersonConnection = nil
-        end
-
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            workspace.CurrentCamera.CFrame = LocalPlayer.Character.HumanoidRootPart.CFrame
-        end
-
-        warn("Third person disabled")
-    end
-end
-
--- ═══════════════════════════════════════════════════════════
--- INFINITE JUMP SYSTEM
--- ═══════════════════════════════════════════════════════════
-
-UserInputService.JumpRequest:Connect(function()
-    if Settings.InfiniteJump and LocalPlayer.Character then
-        local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+-- Break void
+RunService.Heartbeat:Connect(function()
+    if Settings.BreakVoid and LocalPlayer.Character then
+        local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if hrp and hrp.Position.Y < -200 then
+            hrp.CFrame = hrp.CFrame + Vector3.new(0, 400, 0)
+            debugPrint("Prevented void fall!", "INFO")
         end
     end
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- MOVEMENT UPDATE LOOP
+-- FINAL CONSOLE OUTPUT
 -- ═══════════════════════════════════════════════════════════
 
--- Main update loop for movement features
-local MovementUpdateConnection
-MovementUpdateConnection = RunService.Heartbeat:Connect(function()
-    -- Speed boost updates
-    if Settings.SpeedBoost then
-        UpdateSpeedBoost()
-    end
-
-    -- No camera shaking
-    if Settings.NoCameraShaking then
-        local cam = workspace.CurrentCamera
-        if cam then
-            cam.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
-            cam.CameraType = Enum.CameraType.Custom
-        end
-    end
-
-    -- Enable/Disable movement features based on settings
-    -- (These are toggled through the UI callbacks in the main script)
-end)
-
--- Update movement features when settings change
-local function UpdateMovementFeatures()
-    -- Speed Boost
-    UpdateSpeedBoost()
-
-    -- Fly
-    if Settings.Fly and not FlyEnabled then
-        ToggleFly()
-    elseif not Settings.Fly and FlyEnabled then
-        ToggleFly()
-    end
-
-    -- Freecam
-    if Settings.Freecam and not FreecamEnabled then
-        ToggleFreecam()
-    elseif not Settings.Freecam and FreecamEnabled then
-        ToggleFreecam()
-    end
-
-    -- Third Person
-    ToggleThirdPerson()
-end
-
--- Hook into UI callbacks (these would be called from the main UI system)
-_G.VesperUpdateMovement = UpdateMovementFeatures
-
--- Auto-update when settings change (polling)
-task.spawn(function()
-    while true do
-        task.wait(0.5)
-
-        local currentSpeedBoost = Settings.SpeedBoost
-        local currentFly = Settings.Fly
-        local currentFreecam = Settings.Freecam
-        local currentThirdPerson = Settings.ThirdPerson
-        local currentInfiniteJump = Settings.InfiniteJump
-
-        task.wait(0.1) -- Small delay to prevent race conditions
-
-        if currentSpeedBoost ~= Settings.SpeedBoost or
-           currentFly ~= Settings.Fly or
-           currentFreecam ~= Settings.Freecam or
-           currentThirdPerson ~= Settings.ThirdPerson or
-           currentInfiniteJump ~= Settings.InfiniteJump then
-            _G.VesperUpdateMovement()
-        end
-    end
-end)
-
-WaveDebug.print("═══════════════════════════════")
-WaveDebug.print("vesper.lua v2.0 - Enhanced Edition")
-WaveDebug.print("═══════════════════════════════")
-WaveDebug.print("✅ Wave Debug System: ACTIVE")
-WaveDebug.print("✅ Rainbow ESP: IMPLEMENTED")
-WaveDebug.print("✅ Entity Healing: ACTIVE")
-WaveDebug.print("✅ Enhanced Door ESP: ACTIVE")
-WaveDebug.print("Q = Noclip | RightShift = Menu")
-WaveDebug.print("Alt+Click = Teleport | WASD = Movement")
-WaveDebug.print("═══════════════════════════════")
-WaveDebug.info("Script loaded successfully!")
+debugPrint("═════════════════════════════════════════════════════════", "INFO")
+debugPrint("vesper.lua v2.1 - Wave Console Edition - COMPLETE VERSION", "INFO")
+debugPrint("═════════════════════════════════════════════════════════", "INFO")
+debugPrint("✅ Wave Console: ACTIVE", "INFO")
+debugPrint("✅ Obsidian UI: LOADED", "INFO")
+debugPrint("✅ All ESP Systems: READY", "INFO")
+debugPrint("✅ Entity Protections: ACTIVE", "INFO")
+debugPrint("✅ Fullbright: FIXED", "INFO")
+debugPrint("✅ ESP Distance Limits: ACTIVE", "INFO")
+debugPrint("Press RightShift to toggle menu", "INFO")
+debugPrint("Use Q for noclip", "INFO")
+debugPrint("═════════════════════════════════════════════════════════", "INFO")
