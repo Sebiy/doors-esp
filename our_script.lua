@@ -474,64 +474,158 @@ local function ApplyDoorESP(room)
 
     local door = room:FindFirstChild("Door")
     if not door then return end
-    if OpenedDoors[door] and OpenedDoors[door].opened then return end
 
-    local hasKey = room:FindFirstChild("KeyObtain", true) ~= nil
+    -- Better door state check - use multiple methods
+    local isDoorOpened = false
+
+    -- Method 1: Check door model transparency or position
+    local mainDoorPart = door:FindFirstChild("Door")
+    if mainDoorPart and mainDoorPart:IsA("BasePart") then
+        -- Door is usually opened if it's moved significantly
+        local expectedPos = door:GetAttribute("OriginalPosition") or mainDoorPart.Position
+        if (mainDoorPart.Position - expectedPos).Magnitude > 5 then
+            isDoorOpened = true
+        end
+    end
+
+    -- Method 2: Check if we've already recorded this door as opened
+    if OpenedDoors[door] and OpenedDoors[door].opened then
+        isDoorOpened = true
+    end
+
+    if isDoorOpened then return end
+
+    -- Better key detection - check entire room hierarchy
+    local hasKey = false
+    for _, desc in pairs(room:GetDescendants()) do
+        if desc.Name == "KeyObtain" then
+            hasKey = true
+            break
+        end
+    end
+
     local displayNum = roomNum + 1
     local text = string.format("DOOR %d\n%s", displayNum, hasKey and "LOCKED" or "OPEN")
 
-    -- AGGRESSIVE DOOR ESP METHOD - Always find a target
+    -- IMPROVED DOOR ESP METHOD - Always find a target
     local doorTarget = nil
 
     -- Method 1: Main door part
-    local doorPart = door:FindFirstChild("Door")
-    if doorPart and doorPart:IsA("BasePart") then
-        doorTarget = doorPart
+    if mainDoorPart and mainDoorPart:IsA("BasePart") then
+        doorTarget = mainDoorPart
+        -- Store original position if not already stored
+        if not door:GetAttribute("OriginalPosition") then
+            door:SetAttribute("OriginalPosition", mainDoorPart.Position)
+        end
     end
 
     -- Method 2: Any visible part inside door
     if not doorTarget then
         for _, part in pairs(door:GetDescendants()) do
-            if part:IsA("BasePart") and part.Transparency < 0.8 then
+            if part:IsA("BasePart") and part.Transparency < 0.8 and part.Name ~= "ProximityPrompt" then
                 doorTarget = part
                 break
             end
         end
     end
 
-    -- Method 3: Fallback to entire door model
+    -- Method 3: Create an attachment for ESP if no part found
     if not doorTarget then
-        doorTarget = door
+        local attachment = Instance.new("Attachment")
+        attachment.Parent = door
+        attachment.Position = Vector3.new(0, 3, 0) -- Position it above the door
+        attachment.Name = "ESP_Attachment"
+        doorTarget = attachment
     end
 
-    -- Apply ESP if we found a target
+    -- Apply ESP if we found a target and it doesn't already have ESP
     if doorTarget and not HasESP(doorTarget) then
         ApplyESP(doorTarget, text, Settings.DoorESPColor, "Door", room.Name)
-        OpenedDoors[door] = {opened = false, espTarget = doorTarget}
-        debugPrint("Door ESP applied to room " .. room.Name, "INFO")
+        -- Use a more reliable door tracking system
+        OpenedDoors[door] = {opened = false, espTarget = doorTarget, roomNum = roomNum}
+        debugPrint("Door ESP applied to room " .. room.Name .. " (Has Key: " .. tostring(hasKey) .. ")", "INFO")
     end
 
-    -- Monitor door opening
-    for _, desc in pairs(door:GetDescendants()) do
-        if desc:IsA("ProximityPrompt") then
-            if Settings.InstantInteract then desc.HoldDuration = 0 end
-            if Settings.DoorReach then desc.MaxActivationDistance = 20 end
+    -- Monitor door opening with better event handling
+    local function setupDoorPrompt(prompt)
+        if prompt:IsA("ProximityPrompt") then
+            if Settings.InstantInteract then prompt.HoldDuration = 0 end
+            if Settings.DoorReach then prompt.MaxActivationDistance = 20 end
 
-            desc.Triggered:Connect(function()
-                if OpenedDoors[door] and OpenedDoors[door].espTarget then
-                    ClearESP(OpenedDoors[door].espTarget)
-                end
-                OpenedDoors[door] = {opened = true, espTarget = nil}
-                debugPrint(string.format("Door %d opened - ESP cleared", displayNum), "INFO")
-            end)
+            -- Check if already connected to prevent duplicates
+            if not prompt:GetAttribute("ESPSetup") then
+                prompt:SetAttribute("ESPSetup", true)
+
+                prompt.Triggered:Connect(function()
+                    if OpenedDoors[door] and OpenedDoors[door].espTarget then
+                        ClearESP(OpenedDoors[door].espTarget)
+                    end
+                    OpenedDoors[door] = {opened = true, espTarget = nil, roomNum = roomNum}
+                    debugPrint(string.format("Door %d opened - ESP cleared", displayNum), "INFO")
+
+                    -- Re-scan the room after door opens to catch new items
+                    task.wait(0.5)
+                    ScanRoom(room)
+                end)
+            end
         end
     end
+
+    -- Setup existing prompts
+    for _, desc in pairs(door:GetDescendants()) do
+        setupDoorPrompt(desc)
+    end
+
+    -- Monitor for new prompts
+    door.DescendantAdded:Connect(setupDoorPrompt)
 end
 
 local function ApplyKeyESP(key)
     if not Settings.KeyESP then return end
     if HasESP(key) then return end
-    ApplyESP(key, "KEY", Settings.KeyESPColor, "Key", GetRoomName(key))
+
+    -- Make sure the key is valid
+    if not key or not key.Parent then return end
+
+    -- Find a suitable target for ESP
+    local keyTarget = key
+
+    -- If key is a Model, find the main part
+    if key:IsA("Model") then
+        if key.PrimaryPart then
+            keyTarget = key.PrimaryPart
+        else
+            -- Find the largest part
+            local largestPart = nil
+            local largestSize = Vector3.new(0, 0, 0)
+
+            for _, part in pairs(key:GetChildren()) do
+                if part:IsA("BasePart") then
+                    local size = part.Size
+                    if size.X * size.Y * size.Z > largestSize.X * largestSize.Y * largestSize.Z then
+                        largestSize = size
+                        largestPart = part
+                    end
+                end
+            end
+
+            if largestPart then
+                keyTarget = largestPart
+            end
+        end
+    end
+
+    -- If still a model with no parts, create an attachment
+    if keyTarget:IsA("Model") and #keyTarget:GetChildren() == 0 then
+        local attachment = Instance.new("Attachment")
+        attachment.Parent = keyTarget
+        attachment.Position = Vector3.new(0, 2, 0)
+        attachment.Name = "ESP_Attachment"
+        keyTarget = attachment
+    end
+
+    ApplyESP(keyTarget, "KEY", Settings.KeyESPColor, "Key", GetRoomName(key))
+    debugPrint("Key ESP applied to " .. key:GetFullName(), "DEBUG")
 end
 
 local function ApplyWardrobeESP(wardrobe)
@@ -715,9 +809,11 @@ if not success then
     end
     debugPrint("Creating fallback UI...", "WARN")
 
-    -- Fallback UI using simple ScreenGui
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Parent = game:GetService("CoreGui")
+    -- Safely create fallback UI
+    local fallbackSuccess, fallbackErr = pcall(function()
+        -- Fallback UI using simple ScreenGui
+        local ScreenGui = Instance.new("ScreenGui")
+        ScreenGui.Parent = game:GetService("CoreGui")
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     ScreenGui.IgnoreGuiInset = true
 
@@ -866,6 +962,13 @@ if not success then
 
     debugPrint("Fallback UI created successfully", "INFO")
     debugPrint("Press RightShift to toggle menu", "INFO")
+    end)
+
+    if not fallbackSuccess then
+        debugPrint("Failed to create fallback UI: " .. tostring(fallbackErr), "ERROR")
+        debugPrint("Script will continue without UI", "WARN")
+        debugPrint("Use debugPrint to check ESP status", "INFO")
+    end
 end
 
 -- Only create UI elements if Obsidian loaded successfully
@@ -1665,6 +1768,19 @@ task.spawn(function()
     task.wait(1.5)
     ScanAllRooms()
     debugPrint("Initial room scan complete!", "INFO")
+end)
+
+-- Periodic room rescan to refresh ESP
+task.spawn(function()
+    while true do
+        task.wait(10) -- Rescan every 10 seconds
+        for _, room in pairs(CurrentRooms:GetChildren()) do
+            task.spawn(function()
+                ScanRoom(room)
+            end)
+        end
+        debugPrint("Periodic room rescan complete", "DEBUG")
+    end
 end)
 
 -- ═══════════════════════════════════════════════════════════
