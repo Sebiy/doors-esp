@@ -663,33 +663,82 @@ end
 
 local Library, ThemeManager, SaveManager, Window, Options, Toggles
 local success, err = pcall(function()
+    -- Check if httpget is available
+    if not game or not game.HttpGet then
+        error("HTTP service not available")
+    end
+
+    debugPrint("Attempting to load Obsidian UI...", "INFO")
     local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
-    Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
-    ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
-    SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
-    Options = Library.Options
-    Toggles = Library.Toggles
+    -- Try to load with multiple attempts and better error handling
+    local LibraryCode, LibraryErr
+    for i = 1, 5 do
+        LibraryCode, LibraryErr = game:HttpGet(repo .. "Library.lua", false)
+        if LibraryCode and LibraryCode ~= "" and #LibraryCode > 1000 then
+            debugPrint("Successfully fetched Library.lua (attempt " .. i .. ")", "INFO")
+            break
+        end
+        debugPrint("Attempt " .. i .. " failed, retrying...", "WARN")
+        task.wait(0.5)
+    end
 
-    Window = Library:CreateWindow({
-        Title = "vesper.lua",
-        Footer = "version: v2.1 | latest obsidian-ui v0.12.0 | Wave Console Edition",
-        Icon = "rbxassetid://87962219786952",
-        NotifySide = "Right",
-        ShowCustomCursor = true,
-        Center = true,
-        AutoShow = true,
-        Config = {
-            SaveSettings = true,
-            SaveKeybinds = true,
-            NoKeybindNotification = false,
-            KeybindSound = true
-        }
-    })
+    if not LibraryCode or LibraryCode == "" then
+        error("Failed to fetch Library.lua after 5 attempts. Last error: " .. tostring(LibraryErr))
+    end
+
+    if #LibraryCode < 1000 then
+        error("Fetched Library.lua appears to be incomplete (only " .. #LibraryCode .. " bytes)")
+    end
+
+    debugPrint("Compiling Library.lua...", "INFO")
+    Library = loadstring(LibraryCode)
+
+    if not Library then
+        error("Failed to compile Library.lua - syntax error?")
+    end
+
+    debugPrint("Executing Library.lua...", "INFO")
+    Library = Library()
+
+    -- Only load addons if Library loads successfully
+    if Library then
+        debugPrint("Loading addons...", "INFO")
+        ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua", true))()
+        SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua", true))()
+
+        Options = Library.Options
+        Toggles = Library.Toggles
+
+        debugPrint("Creating window...", "INFO")
+        Window = Library:CreateWindow({
+            Title = "vesper.lua",
+            Footer = "version: v2.1 | latest obsidian-ui v0.12.0 | Wave Console Edition",
+            Icon = "rbxassetid://87962219786952",
+            NotifySide = "Right",
+            ShowCustomCursor = true,
+            Center = true,
+            AutoShow = true,
+            Config = {
+                SaveSettings = true,
+                SaveKeybinds = true,
+                NoKeybindNotification = false,
+                KeybindSound = true
+            }
+        })
+
+        debugPrint("Obsidian UI loaded successfully", "INFO")
+    else
+        error("Library failed to execute properly")
+    end
 end)
 
 if not success then
     debugPrint("Failed to load Obsidian UI: " .. tostring(err), "ERROR")
+    debugPrint("Error type: " .. typeof(err), "ERROR")
+    if type(err) == "string" then
+        debugPrint("Error details: " .. err, "ERROR")
+    end
     debugPrint("Creating fallback UI...", "WARN")
 
     -- Fallback UI using simple ScreenGui
