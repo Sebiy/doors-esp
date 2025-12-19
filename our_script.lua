@@ -1004,26 +1004,15 @@ AuraGroup:AddToggle("LockedDoorAura", {
     Callback = function(Value) Settings.LockedDoorAura = Value end
 })
 
--- Wave Console Test Group
-local WaveGroup = Tabs.Main:AddRightGroupbox("Wave Console", "terminal")
+-- Console Test Group
+local WaveGroup = Tabs.Main:AddRightGroupbox("Console", "terminal")
 
 WaveGroup:AddButton({
-    Text = "Test Wave Console",
+    Text = "Test Script",
     Callback = function()
         debugPrint("Test message from vesper.lua!", "INFO")
-        rconsoleprint("@@GREEN@@This is green text!\n")
-        rconsolewarn("@@YELLOW@@This is a warning!\n")
-        rconsoleerr("@@RED@@This is an error!\n")
-        rconsoledebug("@@LIGHT_BLUE@@This is debug text!\n")
-        Library:Notify({Title = "Wave Console Test", Description = "Check Wave console for messages", Time = 3})
-    end
-})
-
-WaveGroup:AddButton({
-    Text = "Clear Console",
-    Callback = function()
-        rconsoleclear()
-        debugPrint("Console cleared", "INFO")
+        print("Script is working correctly!")
+        Library:Notify({Title = "Script Test", Description = "Script is functioning properly", Time = 3})
     end
 })
 
