@@ -107,6 +107,7 @@ local Settings = {
     FlySpeed = 0.4,
     TeleportEnabled = false,
     TeleportDistance = 15,
+    GodMode = false,
     Noclip = false,
     EnableJump = true,
     InfiniteJump = false,
@@ -657,49 +658,211 @@ local function ScanAllRooms()
 end
 
 -- ═══════════════════════════════════════════════════════════
--- LOAD MSPaint UI
+-- LOAD OBSIDIAN UI WITH ERROR HANDLING
 -- ═══════════════════════════════════════════════════════════
 
-local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
-local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
-local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
-local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+local Library, ThemeManager, SaveManager, Window, Options, Toggles
+local success, err = pcall(function()
+    local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+    Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+    ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+    SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
-local Options = Library.Options
-local Toggles = Library.Toggles
+    Options = Library.Options
+    Toggles = Library.Toggles
 
-local Window = Library:CreateWindow({
-    Title = "vesper.lua",
-    Footer = "version: v2.1 | latest obsidian-ui v0.12.0 | Wave Console Edition",
-    Icon = "rbxassetid://87962219786952",
-    NotifySide = "Right",
-    ShowCustomCursor = true,
-    Center = true,
-    AutoShow = true,
-    Config = {
-        SaveSettings = true,
-        SaveKeybinds = true,
-        NoKeybindNotification = false,
-        KeybindSound = true
+    Window = Library:CreateWindow({
+        Title = "vesper.lua",
+        Footer = "version: v2.1 | latest obsidian-ui v0.12.0 | Wave Console Edition",
+        Icon = "rbxassetid://87962219786952",
+        NotifySide = "Right",
+        ShowCustomCursor = true,
+        Center = true,
+        AutoShow = true,
+        Config = {
+            SaveSettings = true,
+            SaveKeybinds = true,
+            NoKeybindNotification = false,
+            KeybindSound = true
+        }
+    })
+end)
+
+if not success then
+    debugPrint("Failed to load Obsidian UI: " .. tostring(err), "ERROR")
+    debugPrint("Creating fallback UI...", "WARN")
+
+    -- Fallback UI using simple ScreenGui
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Parent = game:GetService("CoreGui")
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    ScreenGui.IgnoreGuiInset = true
+
+    -- Create simple toggle frame
+    local Frame = Instance.new("Frame")
+    Frame.Parent = ScreenGui
+    Frame.Size = UDim2.new(0, 300, 0, 400)
+    Frame.Position = UDim2.new(0, 100, 0, 100)
+    Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    Frame.BorderSizePixel = 0
+
+    -- Title
+    local Title = Instance.new("TextLabel")
+    Title.Parent = Frame
+    Title.Size = UDim2.new(1, 0, 0, 40)
+    Title.Position = UDim2.new(0, 0, 0, 0)
+    Title.BackgroundTransparency = 0
+    Title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    Title.BorderSizePixel = 0
+    Title.Text = "vesper.lua v2.1 - FALLBACK UI"
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 18
+
+    -- Make frame draggable
+    local dragging = false
+    local dragStart = Frame.Position
+    local startPos
+
+    Title.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = Frame.Position
+            startPos = input.Position
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - startPos
+            Frame.Position = UDim2.new(dragStart.X.Scale, dragStart.X.Offset + delta.X, dragStart.Y.Scale, dragStart.Y.Offset + delta.Y)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+
+    -- Simple notification function
+    Library = {
+        Notify = function(opts)
+            local notif = Instance.new("Frame")
+            notif.Parent = ScreenGui
+            notif.Size = UDim2.new(0, 250, 0, 80)
+            notif.Position = UDim2.new(1, -270, 1, -100)
+            notif.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+            notif.BorderSizePixel = 0
+
+            local title = Instance.new("TextLabel")
+            title.Parent = notif
+            title.Size = UDim2.new(1, -20, 0, 30)
+            title.Position = UDim2.new(0, 10, 0, 10)
+            title.BackgroundTransparency = 1
+            title.Text = opts.Title or "Notification"
+            title.TextColor3 = Color3.fromRGB(255, 255, 255)
+            title.Font = Enum.Font.Gotham
+            title.TextSize = 16
+            title.TextXAlignment = Enum.TextXAlignment.Left
+
+            local desc = Instance.new("TextLabel")
+            desc.Parent = notif
+            desc.Size = UDim2.new(1, -20, 0, 40)
+            desc.Position = UDim2.new(0, 10, 0, 30)
+            desc.BackgroundTransparency = 1
+            desc.Text = opts.Description or ""
+            desc.TextColor3 = Color3.fromRGB(200, 200, 200)
+            desc.Font = Enum.Font.Gotham
+            desc.TextSize = 14
+            desc.TextXAlignment = Enum.TextXAlignment.Left
+            desc.TextWrapped = true
+
+            -- Animate in
+            notif:TweenPosition(UDim2.new(1, -270, 1, -90), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3)
+
+            game:GetService("Debris"):AddItem(notif, opts.Time or 5)
+
+            delay(opts.Time or 5, function()
+                if notif and notif.Parent then
+                    notif:TweenPosition(UDim2.new(1, 0, 1, -90), Enum.EasingDirection.In, Enum.EasingStyle.Quad, 0.3)
+                    wait(0.3)
+                    notif:Destroy()
+                end
+            end)
+        end
     }
-})
 
-local Tabs = {
-    Main = Window:AddTab("Main", "home"),
-    ESP = Window:AddTab("ESP", "eye"),
-    Player = Window:AddTab("Player", "user"),
-    Visuals = Window:AddTab("Visuals", "monitor"),
-    Settings = Window:AddTab("UI Settings", "settings"),
-    Exploits = Window:AddTab("Exploits", "shield"),
-    Teleport = Window:AddTab("Teleport", "map"),
-    Combat = Window:AddTab("Combat", "sword"),
-}
+    Options = {}
+    Toggles = {}
 
--- ═══════════════════════════════════════════════════════════
--- MAIN TAB
--- ═══════════════════════════════════════════════════════════
+    -- Add simple toggles to fallback UI
+    local y_offset = 50
+    local function createToggle(name, setting, callback)
+        local Toggle = Instance.new("TextButton")
+        Toggle.Parent = Frame
+        Toggle.Size = UDim2.new(1, -20, 0, 30)
+        Toggle.Position = UDim2.new(0, 10, 0, y_offset)
+        Toggle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        Toggle.BorderSizePixel = 0
+        Toggle.Text = name .. ": OFF"
+        Toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Toggle.Font = Enum.Font.Gotham
+        Toggle.TextSize = 14
 
-local MiscGroup = Tabs.Main:AddLeftGroupbox("Miscellaneous", "wrench")
+        Toggle.MouseButton1Click:Connect(function()
+            Settings[setting] = not Settings[setting]
+            Toggle.Text = name .. ": " .. (Settings[setting] and "ON" or "OFF")
+            Toggle.BackgroundColor3 = Settings[setting] and Color3.fromRGB(25, 100, 25) or Color3.fromRGB(50, 50, 50)
+            if callback then callback(Settings[setting]) end
+        end)
+
+        y_offset = y_offset + 35
+    end
+
+    -- Create essential toggles
+    createToggle("Door ESP", "DoorESP")
+    createToggle("Item ESP", "ItemESP")
+    createToggle("Entity ESP", "EntityESP")
+    createToggle("Fullbright", "Fullbright", function(value)
+        if value then
+            ApplyFullbright()
+        else
+            RemoveFullbright()
+        end
+    end)
+    createToggle("God Mode", "GodMode")
+    createToggle("Noclip", "Noclip")
+
+    -- Toggle key
+    UserInputService.InputBegan:Connect(function(input, processed)
+        if not processed and input.KeyCode == Enum.KeyCode.RightShift then
+            Frame.Visible = not Frame.Visible
+        end
+    end)
+
+    debugPrint("Fallback UI created successfully", "INFO")
+    debugPrint("Press RightShift to toggle menu", "INFO")
+end
+
+-- Only create UI elements if Obsidian loaded successfully
+if success then
+    local Tabs = {
+        Main = Window:AddTab("Main", "home"),
+        ESP = Window:AddTab("ESP", "eye"),
+        Player = Window:AddTab("Player", "user"),
+        Visuals = Window:AddTab("Visuals", "monitor"),
+        Settings = Window:AddTab("UI Settings", "settings"),
+        Exploits = Window:AddTab("Exploits", "shield"),
+        Teleport = Window:AddTab("Teleport", "map"),
+        Combat = Window:AddTab("Combat", "sword"),
+    }
+
+    -- ═══════════════════════════════════════════════════════════
+    -- MAIN TAB
+    -- ═══════════════════════════════════════════════════════════
+
+    local MiscGroup = Tabs.Main:AddLeftGroupbox("Miscellaneous", "wrench")
 
 MiscGroup:AddToggle("InstantInteract", {
     Text = "Instant Proximity Prompt",
@@ -1619,6 +1782,17 @@ workspace.DescendantAdded:Connect(function(desc)
     end
 end)
 
+-- God Mode
+LocalPlayer.CharacterAdded:Connect(function(character)
+    local humanoid = character:WaitForChild("Humanoid")
+    humanoid.Died:Connect(function()
+        if Settings.GodMode then
+            humanoid.Health = humanoid.MaxHealth
+            debugPrint("God Mode: Prevented death", "INFO")
+        end
+    end)
+end)
+
 -- Break void
 RunService.Heartbeat:Connect(function()
     if Settings.BreakVoid and LocalPlayer.Character then
@@ -1629,6 +1803,7 @@ RunService.Heartbeat:Connect(function()
         end
     end
 end)
+end
 
 -- ═══════════════════════════════════════════════════════════
 -- FINAL CONSOLE OUTPUT
@@ -1638,7 +1813,7 @@ debugPrint("══════════════════════�
 debugPrint("vesper.lua v2.1 - Wave Console Edition - COMPLETE VERSION", "INFO")
 debugPrint("═════════════════════════════════════════════════════════", "INFO")
 debugPrint("✅ Wave Console: ACTIVE", "INFO")
-debugPrint("✅ Obsidian UI: LOADED", "INFO")
+debugPrint(success and "✅ Obsidian UI: LOADED" or "✅ Fallback UI: CREATED", "INFO")
 debugPrint("✅ All ESP Systems: READY", "INFO")
 debugPrint("✅ Entity Protections: ACTIVE", "INFO")
 debugPrint("✅ Fullbright: FIXED", "INFO")
