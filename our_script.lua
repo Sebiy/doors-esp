@@ -14,51 +14,25 @@ local CurrentRooms = Workspace:WaitForChild("CurrentRooms")
 local Lighting = game:GetService("Lighting")
 
 -- ═══════════════════════════════════════════════════════════
--- WAVE CONSOLE INTEGRATION - Using official Wave functions
+-- CONSOLE OUTPUT - Seliware Compatible
 -- ═══════════════════════════════════════════════════════════
 
--- Initialize Wave console immediately
-rconsolecreate()
-rconsolename("vesper.lua v2.1 - Wave Console - " .. os.date("%Y-%m-%d %H:%M:%S"))
-
--- Console header
-rconsoleprint("@@LIGHT_BLUE@@")
-rconsoleprint("╔════════════════════════════════════════════════════════╗\n")
-rconsoleprint("@@CYAN@@")
-rconsoleprint("│                 vesper.lua v2.1 - Wave Edition                │\n")
-rconsoleprint("│            DOORS Script with Official Wave Functions          │\n")
-rconsoleprint("@@LIGHT_BLUE@@")
-rconsoleprint("╚════════════════════════════════════════════════════════╝\n")
-rconsoleprint("@@WHITE@@")
-
--- Simple debug functions using Wave
+-- Simple debug function
 local function debugPrint(message, level)
     level = level or "INFO"
-    if level == "ERROR" then
-        rconsoleerr("@@RED@@[ERROR] @@WHITE@@" .. tostring(message) .. "\n")
-    elseif level == "WARN" then
-        rconsolewarn("@@YELLOW@@[WARN] @@WHITE@@" .. tostring(message) .. "\n")
-    elseif level == "DEBUG" then
-        rconsoledebug("@@LIGHT_BLUE@@[DEBUG] @@WHITE@@" .. tostring(message) .. "\n")
-    else
-        rconsoleprint("@@WHITE@@" .. tostring(message) .. "\n")
-    end
+    local prefix = "[" .. level .. "] "
+    print(prefix .. tostring(message))
 end
+
+-- Console header
+print("╔════════════════════════════════════════════════════════╗")
+print("│                 vesper.lua v2.1 - Seliware Edition           │")
+print("│                  DOORS Script with ESP & More               │")
+print("╚════════════════════════════════════════════════════════╝")
 
 -- Test console immediately
-debugPrint("Wave Console initialized!", "INFO")
-debugPrint("Using official Wave rconsole functions", "INFO")
-
--- Show system info
-local success, hwid = pcall(gethwid)
-if success then
-    debugPrint("HWID: " .. hwid, "INFO")
-end
-
-local success2, fps = pcall(getfpscap)
-if success2 then
-    debugPrint("FPS Cap: " .. tostring(fps), "INFO")
-end
+debugPrint("Script initialized!", "INFO")
+debugPrint("Ready for DOORS exploitation", "INFO")
 
 -- Settings
 local Settings = {
@@ -713,7 +687,7 @@ local success, err = pcall(function()
         debugPrint("Creating window...", "INFO")
         Window = Library:CreateWindow({
             Title = "vesper.lua",
-            Footer = "version: v2.1 | latest obsidian-ui v0.12.0 | Wave Console Edition",
+            Footer = "version: v2.1 | latest obsidian-ui v0.12.0 | Seliware Edition",
             Icon = "rbxassetid://87962219786952",
             NotifySide = "Right",
             ShowCustomCursor = true,
@@ -763,7 +737,7 @@ if not success then
     Title.BackgroundTransparency = 0
     Title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     Title.BorderSizePixel = 0
-    Title.Text = "vesper.lua v2.1 - FALLBACK UI"
+    Title.Text = "vesper.lua v2.1 - Seliware Edition"
     Title.TextColor3 = Color3.fromRGB(255, 255, 255)
     Title.Font = Enum.Font.GothamBold
     Title.TextSize = 18
@@ -1859,9 +1833,9 @@ end
 -- ═══════════════════════════════════════════════════════════
 
 debugPrint("═════════════════════════════════════════════════════════", "INFO")
-debugPrint("vesper.lua v2.1 - Wave Console Edition - COMPLETE VERSION", "INFO")
+debugPrint("vesper.lua v2.1 - Seliware Edition - COMPLETE VERSION", "INFO")
 debugPrint("═════════════════════════════════════════════════════════", "INFO")
-debugPrint("✅ Wave Console: ACTIVE", "INFO")
+debugPrint("✅ Script: LOADED", "INFO")
 debugPrint(success and "✅ Obsidian UI: LOADED" or "✅ Fallback UI: CREATED", "INFO")
 debugPrint("✅ All ESP Systems: READY", "INFO")
 debugPrint("✅ Entity Protections: ACTIVE", "INFO")
